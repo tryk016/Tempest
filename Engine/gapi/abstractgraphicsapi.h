@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <atomic>
+#include <cstdint>
 #include <vector>
 #include <string_view>
 
@@ -18,6 +19,28 @@ namespace Tempest {
   class Color;
   class RenderState;
   class Device;
+
+  enum class PresentFailureKind : uint8_t {
+    None,
+    DeviceLost,
+    Timeout,
+    OutOfMemory,
+    InvalidResource,
+    Internal,
+    UnexpectedStatus,
+    Unknown,
+    };
+
+  struct PresentFailure final {
+    PresentFailureKind kind       = PresentFailureKind::None;
+    int32_t            statusCode = 0;
+    int64_t            nativeCode = 0;
+    uint64_t           serial     = 0;
+
+    explicit operator bool() const noexcept {
+      return kind!=PresentFailureKind::None;
+      }
+    };
 
   namespace Decl {
   enum ComponentType:uint8_t {
@@ -550,6 +573,7 @@ namespace Tempest {
       struct Device:NoCopy {
         virtual ~Device()=default;
         virtual void        waitIdle() = 0;
+        virtual PresentFailure takePresentFailure() noexcept { return {}; }
         };
       struct Fence:NoCopy {
         virtual ~Fence()=default;

@@ -64,24 +64,15 @@ MtDevice::MtDevice(std::string_view name, bool validation)
   }
 
 MtDevice::~MtDevice() {
-  }
-
-void MtDevice::onSubmit() {
-  std::lock_guard<std::mutex> guard(devIdleSync);
-  devCmdBuf.fetch_add(1u);
-  }
-
-void MtDevice::onFinish() {
-  std::lock_guard<std::mutex> guard(devIdleSync);
-  devCmdBuf.fetch_add(-1);
-  devIdleCv.notify_all();
+  waitIdle();
   }
 
 void MtDevice::waitIdle() {
-  std::unique_lock<std::mutex> guard(devIdleSync);
-  devIdleCv.wait(guard,[this](){
-    return 0==devCmdBuf.load();
-    });
+  async->waitIdle();
+  }
+
+PresentFailure MtDevice::takePresentFailure() noexcept {
+  return async->takePresentFailure();
   }
 
 std::shared_ptr<MtFence> MtDevice::findAvailableFence() {
@@ -155,40 +146,53 @@ MTL::CommandBufferStatus MtDevice::waitFence(MtFence& t, uint64_t timeout) {
   return t.status.load();
   }
 
-void MtDevice::signalFence(MtFence& t, MTL::CommandBufferStatus st, MTL::CommandBufferError err, NS::Error* desc) {
-  if(st==MTL::CommandBufferStatusNotEnqueued ||
-     st==MTL::CommandBufferStatusEnqueued ||
-     st==MTL::CommandBufferStatusCommitted)
-    return;
-
-  if(st==MTL::CommandBufferStatusCompleted) {
-    t.status.store(st);
-    timeline.cond.notify_all();
-    return;
+void MtDevice::signalFence(MtFence& t, MTL::CommandBufferStatus st,
+                           MTL::CommandBufferError err, NS::Error* desc) noexcept {
+  const bool unexpectedStatus =
+    st!=MTL::CommandBufferStatusCompleted &&
+    st!=MTL::CommandBufferStatusError;
+  if(unexpectedStatus) {
+    st  = MTL::CommandBufferStatusError;
+    err = MTL::CommandBufferErrorInternal;
+    }
+  else if(st==MTL::CommandBufferStatusError && err==MTL::CommandBufferErrorNone) {
+    err = MTL::CommandBufferErrorInternal;
     }
 
-  std::lock_guard<std::mutex> guard(timeline.sync);
-  t.status = st;
-  t.error  = err;
-  if(st==MTL::CommandBufferStatusError) {
-    try {
-      t.errorStr = desc->description()->cString(NS::UTF8StringEncoding);
+  {
+    std::lock_guard<std::mutex> guard(timeline.sync);
+    t.error = err;
+    if(st==MTL::CommandBufferStatusError) {
+      t.errorStr.clear();
       t.errorLog.clear();
+      if(unexpectedStatus) {
+        try {
+          t.errorStr = "Metal completion handler returned a nonterminal status";
+          }
+        catch(...) {
+          }
+        }
+      else if(desc!=nullptr) {
+        try {
+          t.errorStr = desc->description()->cString(NS::UTF8StringEncoding);
 
-      if(auto at = desc->userInfo()->object(MTL::CommandBufferEncoderInfoErrorKey)) {
-        auto info = reinterpret_cast<NS::Array*>(at);
-        for(size_t i=0; i<info->count(); ++i) {
-          auto ix  = reinterpret_cast<MTL::CommandBufferEncoderInfo*>(info->object(i));
-          auto str = ix->debugDescription()->cString(NS::UTF8StringEncoding);
-          if(!t.errorLog.empty())
-            t.errorLog += "\n";
-          t.errorLog += str;
+          if(auto at = desc->userInfo()->object(MTL::CommandBufferEncoderInfoErrorKey)) {
+            auto info = reinterpret_cast<NS::Array*>(at);
+            for(size_t i=0; i<info->count(); ++i) {
+              auto ix  = reinterpret_cast<MTL::CommandBufferEncoderInfo*>(info->object(i));
+              auto str = ix->debugDescription()->cString(NS::UTF8StringEncoding);
+              if(!t.errorLog.empty())
+                t.errorLog += "\n";
+              t.errorLog += str;
+              }
+            }
+          }
+        catch(...) {
+          // Error text is diagnostic only; the terminal status remains valid.
           }
         }
       }
-    catch(...) {
-      // fail to coller error string. Oh well...
-      }
+    t.status.store(st,std::memory_order_release);
     }
   timeline.cond.notify_all();
   }

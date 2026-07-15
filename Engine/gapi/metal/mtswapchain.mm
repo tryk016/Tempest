@@ -4,7 +4,6 @@
 
 #include <Tempest/Application>
 #include <Tempest/Except>
-#include <Tempest/Log>
 
 #include "mtdevice.h"
 
@@ -50,9 +49,37 @@ using SysWindow = UIWindow;
   }
 @end
 
+static PresentFailureKind presentFailureKind(MTL::CommandBufferStatus status,
+                                             int64_t nativeCode) noexcept {
+  if(status!=MTL::CommandBufferStatusError)
+    return PresentFailureKind::UnexpectedStatus;
+
+  switch(MTL::CommandBufferError(nativeCode)) {
+    case MTL::CommandBufferErrorTimeout:
+      return PresentFailureKind::Timeout;
+    case MTL::CommandBufferErrorOutOfMemory:
+      return PresentFailureKind::OutOfMemory;
+    case MTL::CommandBufferErrorInvalidResource:
+      return PresentFailureKind::InvalidResource;
+    case MTL::CommandBufferErrorPageFault:
+    case MTL::CommandBufferErrorBlacklisted:
+    case MTL::CommandBufferErrorNotPermitted:
+    case MTL::CommandBufferErrorDeviceRemoved:
+      return PresentFailureKind::DeviceLost;
+    case MTL::CommandBufferErrorInternal:
+    case MTL::CommandBufferErrorMemoryless:
+    case MTL::CommandBufferErrorStackOverflow:
+      return PresentFailureKind::Internal;
+    case MTL::CommandBufferErrorNone:
+      return PresentFailureKind::Unknown;
+    }
+  return PresentFailureKind::Unknown;
+  }
+
 struct MtSwapchain::Impl {
   SysWindow* wnd  = nil;
   MetalView* view = nil;
+  uint64_t nextPresentSerial = 1;
 #if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
   CA::MetalDrawable* drawable = nullptr;
 #endif
@@ -234,25 +261,45 @@ void MtSwapchain::present() {
 #endif
   cmd->presentDrawable(drawable);
 
-  dev.onSubmit();
-  cmd->addCompletedHandler(^(MTL::CommandBuffer* c){
-    MTL::CommandBufferStatus s = c->status();
-    if(s==MTL::CommandBufferStatusNotEnqueued ||
-       s==MTL::CommandBufferStatusEnqueued ||
-       s==MTL::CommandBufferStatusCommitted ||
-       s==MTL::CommandBufferStatusScheduled)
-      return;
-
-    if(s!=MTL::CommandBufferStatusCompleted) {
-      Log::e("swapchain fatal error");
-      dev.onFinish();
-      dev.waitIdle();
-      return;
+  const uint64_t presentSerial = pimpl->nextPresentSerial++;
+  auto async = dev.asyncState();
+  MtAsyncState::SubmissionToken token;
+  try {
+    token = async->onSubmit();
+    cmd->addCompletedHandler(^(MTL::CommandBuffer* c){
+      if(!async->beginCompletion(token))
+        return;
+      PresentFailure failure;
+      failure.serial     = presentSerial;
+      try {
+        const MTL::CommandBufferStatus status = c->status();
+        NS::Error* const error = c->error();
+        failure.statusCode = int32_t(status);
+        failure.nativeCode = error!=nullptr ? int64_t(error->code()) : 0;
+        if(status!=MTL::CommandBufferStatusCompleted)
+          failure.kind = presentFailureKind(status,failure.nativeCode);
+        }
+      catch(...) {
+        failure.kind = PresentFailureKind::Internal;
+        }
+#if defined(TEMPEST_METAL_FAULT_ASYNC_PRESENT_AFTER_TERMINAL)
+      constexpr bool injectFault = true;
+#else
+      constexpr bool injectFault = false;
+#endif
+      async->finishCompletion(token,failure,injectFault);
+      });
+    cmd->commit();
+    }
+  catch(...) {
+    if(token && async->beginCompletion(token)) {
+      PresentFailure failure;
+      failure.kind       = PresentFailureKind::Internal;
+      failure.serial     = presentSerial;
+      async->finishCompletion(token,failure);
       }
-
-    dev.onFinish();
-    });
-  cmd->commit();
+    throw;
+    }
 
 #if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
   // presentDrawable retains the drawable until presentation completes. Drop

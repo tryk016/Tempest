@@ -8,8 +8,13 @@
 #include <Metal/Metal.hpp>
 #include <Foundation/Foundation.hpp>
 
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+
 #include "../utility/compiller_hints.h"
 #include "gapi/shaderreflection.h"
+#include "gapi/metal/mtasyncstate.h"
 #include "gapi/metal/mtsync.h"
 #include "gapi/metal/mtsamplercache.h"
 #include "nsptr.h"
@@ -264,24 +269,22 @@ class MtDevice : public AbstractGraphicsApi::Device {
     bool     useNativeImageAtomic() const;
     uint32_t linearImageAlignment() const;
 
-    void     onSubmit();
-    void     onFinish();
     void     waitIdle() override;
+    PresentFailure takePresentFailure() noexcept override;
+    std::shared_ptr<MtAsyncState> asyncState() const noexcept { return async; }
 
     std::shared_ptr<MtFence> findAvailableFence();
     void                     waitAny(std::unique_lock<std::mutex>& guard);
     std::shared_ptr<MtFence> aquireFence();
     MTL::CommandBufferStatus waitFence(MtFence& t, uint64_t timeout);
-    void                     signalFence(MtFence& t, MTL::CommandBufferStatus st, MTL::CommandBufferError errC, NS::Error* desc);
+    void                     signalFence(MtFence& t, MTL::CommandBufferStatus st, MTL::CommandBufferError errC, NS::Error* desc) noexcept;
 
     static void handleError(NS::Error* err);
 
     NsPtr<MTL::Device>         impl;
     NsPtr<MTL::CommandQueue>   queue;
 
-    std::condition_variable    devIdleCv;
-    std::mutex                 devIdleSync;
-    std::atomic_uint32_t       devCmdBuf{0};
+    std::shared_ptr<MtAsyncState> async = std::make_shared<MtAsyncState>();
 
     Timeline                   timeline;
 

@@ -78,6 +78,10 @@ void Device::waitIdle() {
   impl.dev->waitIdle();
   }
 
+PresentFailure Device::takePresentFailure() noexcept {
+  return impl.dev->takePresentFailure();
+  }
+
 Fence Device::submit(const CommandBuffer &cmd) {
   auto fn = api.submit(dev,cmd.impl.handler);
   return Fence(fn);
@@ -418,4 +422,3 @@ Detail::VideoBuffer Device::createVideoBuffer(const void *data, size_t size, Mem
   Detail::VideoBuffer buf(api.createBuffer(dev,data,size,usage,flg), size);
   return  buf;
   }
-

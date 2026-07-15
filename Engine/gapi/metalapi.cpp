@@ -206,19 +206,50 @@ std::shared_ptr<AbstractGraphicsApi::Fence> MetalApi::submit(Device* d, CommandB
   auto* dx = reinterpret_cast<MtDevice*>(d);
   auto& cx = *reinterpret_cast<MtCommandBuffer*>(c);
 
+  if(cx.isRecording())
+    throw ConcurentRecordingException();
+
+  MTL::CommandBuffer& cmd = *cx.impl;
+  const auto initialStatus = cmd.status();
+  if(initialStatus!=MTL::CommandBufferStatusNotEnqueued &&
+     initialStatus!=MTL::CommandBufferStatusEnqueued)
+    throw DeviceLostException("Metal command buffer cannot be committed in its current state");
+
   auto pfence = dx->aquireFence();
   if(pfence==nullptr)
     throw DeviceLostException();
 
-  MTL::CommandBuffer& cmd = *cx.impl;
-  dx->onSubmit();
-  cmd.addCompletedHandler(^(MTL::CommandBuffer* c){
-    const MTL::CommandBufferStatus s = c->status();
-    dx->signalFence(*pfence, s, MTL::CommandBufferError(c->error()->code()), c->error());
-    if(s==MTL::CommandBufferStatusCompleted || s==MTL::CommandBufferStatusError)
-      dx->onFinish();
-    });
-  cmd.commit();
+  auto async = dx->asyncState();
+  MtAsyncState::SubmissionToken token;
+  try {
+    token = async->onSubmit();
+    cmd.addCompletedHandler(^(MTL::CommandBuffer* c){
+      if(!async->beginCompletion(token))
+        return;
+      try {
+        const MTL::CommandBufferStatus s = c->status();
+        NS::Error* const error = c->error();
+        const auto errorCode = error!=nullptr ?
+          MTL::CommandBufferError(error->code()) : MTL::CommandBufferErrorNone;
+        dx->signalFence(*pfence,s,errorCode,error);
+        }
+      catch(...) {
+        dx->signalFence(*pfence,MTL::CommandBufferStatusError,
+                        MTL::CommandBufferErrorInternal,nullptr);
+        }
+      async->finishCompletion(token);
+      });
+    cmd.commit();
+    }
+  catch(...) {
+    if(!token || async->beginCompletion(token)) {
+      dx->signalFence(*pfence,MTL::CommandBufferStatusError,
+                      MTL::CommandBufferErrorInternal,nullptr);
+      if(token)
+        async->finishCompletion(token);
+      }
+    throw;
+    }
   return pfence;
   }
 

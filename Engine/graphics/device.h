@@ -46,6 +46,8 @@ class Device {
     virtual ~Device();
 
     void                  waitIdle();
+    [[nodiscard]]
+    PresentFailure        takePresentFailure() noexcept;
 
     [[nodiscard]]
     Fence                 submit(const CommandBuffer& cmd);
@@ -269,4 +271,3 @@ inline AccelerationStructure Device::blas(const VertexBuffer<V>& vbo, const Inde
   }
 
 }
-
