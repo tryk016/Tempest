@@ -266,6 +266,9 @@ void MtSwapchain::present() {
   MtAsyncState::SubmissionToken token;
   try {
     token = async->onSubmit();
+    if(!token)
+      throw DeviceLostException(
+        "Metal present rejected after an asynchronous present failure");
     cmd->addCompletedHandler(^(MTL::CommandBuffer* c){
       if(!async->beginCompletion(token))
         return;

@@ -37,6 +37,7 @@ TEST(main,MetalAsyncPresentMailboxFirstFailureWins) {
   EXPECT_EQ(result.nativeCode,2);
   EXPECT_EQ(result.serial,10u);
   EXPECT_FALSE(state.takePresentFailure());
+  EXPECT_FALSE(state.onSubmit());
   }
 
 TEST(main,MetalAsyncPresentFaultIsOneShot) {
@@ -45,17 +46,18 @@ TEST(main,MetalAsyncPresentFaultIsOneShot) {
   completed.statusCode = 4;
   completed.serial     = 1;
 
-  auto token = state.onSubmit();
-  ASSERT_TRUE(state.beginCompletion(token));
-  state.finishCompletion(token,completed,true);
+  const auto firstToken  = state.onSubmit();
+  const auto secondToken = state.onSubmit();
+  ASSERT_TRUE(state.beginCompletion(firstToken));
+  state.finishCompletion(firstToken,completed,true);
   EXPECT_EQ(state.takePresentFailure().kind,
             PresentFailureKind::DeviceLost);
 
   completed.serial = 2;
-  token = state.onSubmit();
-  ASSERT_TRUE(state.beginCompletion(token));
-  state.finishCompletion(token,completed,true);
+  ASSERT_TRUE(state.beginCompletion(secondToken));
+  state.finishCompletion(secondToken,completed,true);
   EXPECT_FALSE(state.takePresentFailure());
+  EXPECT_FALSE(state.onSubmit());
   }
 
 TEST(main,MetalAsyncPresentPublishesBeforeIdle) {

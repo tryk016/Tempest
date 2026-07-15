@@ -26,6 +26,8 @@ class MtAsyncState final {
 
     SubmissionToken onSubmit() {
       std::lock_guard<std::mutex> guard(sync);
+      if(presentFatal)
+        return {};
       uint32_t slotId = 0;
       for(; slotId<slots.size(); ++slotId)
         if(slots[slotId].state==SlotState::Free)
@@ -70,6 +72,8 @@ class MtAsyncState final {
           }
         if(failure && !presentFailure)
           presentFailure = failure;
+        if(failure)
+          presentFatal = true;
         slot.state = SlotState::Free;
         --inFlight;
       }
@@ -108,6 +112,7 @@ class MtAsyncState final {
     std::vector<Slot>       slots;
     PresentFailure          presentFailure;
     bool                    presentFaultInjected = false;
+    bool                    presentFatal = false;
   };
 
 }

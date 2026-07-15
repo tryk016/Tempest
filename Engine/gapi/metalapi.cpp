@@ -223,6 +223,9 @@ std::shared_ptr<AbstractGraphicsApi::Fence> MetalApi::submit(Device* d, CommandB
   MtAsyncState::SubmissionToken token;
   try {
     token = async->onSubmit();
+    if(!token)
+      throw DeviceLostException(
+        "Metal submission rejected after an asynchronous present failure");
     cmd.addCompletedHandler(^(MTL::CommandBuffer* c){
       if(!async->beginCompletion(token))
         return;
