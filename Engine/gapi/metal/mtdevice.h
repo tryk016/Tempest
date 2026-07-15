@@ -72,6 +72,8 @@ inline MTL::PixelFormat nativeFormat(TextureFormat frm) {
       return MTL::PixelFormatBC3_RGBA;
     case R11G11B10UF:
       return MTL::PixelFormatRG11B10Float;
+    case RG16F:
+      return MTL::PixelFormatRG16Float;
     case RGBA16F:
       return MTL::PixelFormatRGBA16Float;
     }

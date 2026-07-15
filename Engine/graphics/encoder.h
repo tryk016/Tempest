@@ -7,6 +7,8 @@
 #include <Tempest/DescriptorArray>
 #include <Tempest/UniformBuffer>
 #include <Tempest/AccelerationStructure>
+#include <Tempest/SpatialScaler>
+#include <Tempest/TemporalScaler>
 
 namespace Tempest {
 
@@ -118,6 +120,10 @@ class Encoder<Tempest::CommandBuffer> {
     void copy(const Texture2d&  src, uint32_t mip, StorageBuffer& dest, size_t offset);
 
     void generateMipmaps(Attachment& tex);
+
+    bool spatialUpscale(const SpatialScaler& scaler, const Attachment& input, StorageImage& output);
+    bool temporalUpscale(const TemporalScaler& scaler, const Attachment& color, const ZBuffer& depth,
+                         const Attachment& motion, StorageImage& output, const TemporalScalerArgs& args);
 
   private:
     explicit Encoder(CommandBuffer* ow);

@@ -14,6 +14,8 @@
 #include <Tempest/UniformBuffer>
 #include <Tempest/StorageBuffer>
 #include <Tempest/StorageImage>
+#include <Tempest/SpatialScaler>
+#include <Tempest/TemporalScaler>
 #include <Tempest/AccelerationStructure>
 #include <Tempest/Builtin>
 #include <Tempest/Swapchain>
@@ -130,6 +132,9 @@ class Device {
     Attachment            attachment (TextureFormat frm, const Size sz, const bool mips = false);
     ZBuffer               zbuffer    (TextureFormat frm, const Size sz);
     StorageImage          image2d    (TextureFormat frm, const Size sz, const bool mips = false);
+
+    SpatialScaler         spatialScaler(const SpatialScalerDesc& desc);
+    TemporalScaler        temporalScaler(const TemporalScalerDesc& desc);
 
     AccelerationStructure blas(const std::vector<RtGeometry>& geom);
     AccelerationStructure blas(std::initializer_list<RtGeometry> geom);

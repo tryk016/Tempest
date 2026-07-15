@@ -85,6 +85,15 @@ void AbstractGraphicsApi::CommandBuffer::setDebugMarker(std::string_view tag) {
   (void)tag;
   }
 
+bool AbstractGraphicsApi::CommandBuffer::spatialUpscale(SpatialScaler&, Texture&, Texture&) {
+  return false;
+  }
+
+bool AbstractGraphicsApi::CommandBuffer::temporalUpscale(TemporalScaler&, Texture&, Texture&,
+                                                         Texture&, Texture&, const TemporalScalerArgs&) {
+  return false;
+  }
+
 void AbstractGraphicsApi::CommandBuffer::dispatchMesh(size_t x, size_t y, size_t z) {
   throw std::system_error(Tempest::GraphicsErrc::UnsupportedExtension);
   }
@@ -100,6 +109,16 @@ AbstractGraphicsApi::AccelerationStructure* AbstractGraphicsApi::createBottomAcc
 AbstractGraphicsApi::AccelerationStructure*
   AbstractGraphicsApi::createTopAccelerationStruct(Device* d, const RtInstance* geom, AccelerationStructure*const* as, size_t geomSize) {
   throw std::system_error(Tempest::GraphicsErrc::UnsupportedExtension);
+  }
+
+AbstractGraphicsApi::SpatialScaler*
+  AbstractGraphicsApi::createSpatialScaler(Device*, const SpatialScalerDesc&) {
+  return nullptr;
+  }
+
+AbstractGraphicsApi::TemporalScaler*
+  AbstractGraphicsApi::createTemporalScaler(Device*, const TemporalScalerDesc&) {
+  return nullptr;
   }
 
 bool Detail::Bindings::operator ==(const Bindings &other) const {

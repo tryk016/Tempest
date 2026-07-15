@@ -247,6 +247,14 @@ StorageImage Device::image3d(TextureFormat frm, const uint32_t w, const uint32_t
   return StorageImage(std::move(t));
   }
 
+SpatialScaler Device::spatialScaler(const SpatialScalerDesc& desc) {
+  return SpatialScaler(api.createSpatialScaler(dev,desc));
+  }
+
+TemporalScaler Device::temporalScaler(const TemporalScalerDesc& desc) {
+  return TemporalScaler(api.createTemporalScaler(dev,desc));
+  }
+
 Attachment Device::attachment(TextureFormat frm, const Size sz, const bool mips) {
   if(sz.w<0 || sz.h<0)
     throw std::system_error(Tempest::GraphicsErrc::TooLargeTexture, std::to_string(std::min(sz.w,sz.h)));

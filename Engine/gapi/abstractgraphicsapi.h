@@ -127,8 +127,46 @@ namespace Tempest {
     DXT3,
     DXT5,
     R11G11B10UF,
+    RG16F,
     RGBA16F,
     Last
+    };
+
+  enum class SpatialScalerColorMode : uint8_t {
+    Perceptual,
+    Linear,
+    HDR,
+    };
+
+  struct SpatialScalerDesc final {
+    TextureFormat          inputFormat  = Undefined;
+    TextureFormat          outputFormat = Undefined;
+    uint32_t               inputWidth   = 0;
+    uint32_t               inputHeight  = 0;
+    uint32_t               outputWidth  = 0;
+    uint32_t               outputHeight = 0;
+    SpatialScalerColorMode colorMode    = SpatialScalerColorMode::Perceptual;
+    };
+
+  struct TemporalScalerDesc final {
+    TextureFormat inputFormat  = Undefined;
+    TextureFormat depthFormat  = Undefined;
+    TextureFormat motionFormat = Undefined;
+    TextureFormat outputFormat = Undefined;
+    uint32_t      inputWidth   = 0;
+    uint32_t      inputHeight  = 0;
+    uint32_t      outputWidth  = 0;
+    uint32_t      outputHeight = 0;
+    bool          autoExposure = true;
+    };
+
+  struct TemporalScalerArgs final {
+    float jitterOffsetX      = 0.f;
+    float jitterOffsetY      = 0.f;
+    float motionVectorScaleX = 1.f;
+    float motionVectorScaleY = 1.f;
+    bool  resetHistory       = false;
+    bool  depthReversed      = false;
     };
 
   inline const char* formatName(TextureFormat f) {
@@ -158,6 +196,7 @@ namespace Tempest {
       case DXT3:        return "DXT3";
       case DXT5:        return "DXT5";
       case R11G11B10UF: return "R11G11B10UF";
+      case RG16F:       return "RG16F";
       case RGBA16F:     return "RGBA16F";
       case Last:
         break;
@@ -530,6 +569,8 @@ namespace Tempest {
         virtual uint32_t      mipCount() const = 0;
         virtual NonUniqResId  syncId() const = 0;
         };
+      struct SpatialScaler:NoCopy {};
+      struct TemporalScaler:NoCopy {};
       struct Pipeline:Shared {
         virtual IVec3  workGroupSize() const = 0;
         virtual size_t sizeofBuffer(size_t id, size_t arraylen) const = 0;
@@ -584,6 +625,9 @@ namespace Tempest {
 
         virtual void generateMipmap(Texture& image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels) = 0;
         virtual void copy(Buffer& dest, size_t offset, Texture& src, uint32_t width, uint32_t height, uint32_t mip) = 0;
+        virtual bool spatialUpscale(SpatialScaler& scaler, Texture& input, Texture& output);
+        virtual bool temporalUpscale(TemporalScaler& scaler, Texture& color, Texture& depth,
+                                     Texture& motion, Texture& output, const TemporalScalerArgs& args);
 
         virtual bool isRecording() const = 0;
         virtual void begin(Detail::SyncHint hint);
@@ -650,6 +694,8 @@ namespace Tempest {
       virtual PTexture   createTexture(Device* d, const uint32_t w, const uint32_t h, uint32_t mips, TextureFormat frm) = 0;
       virtual PTexture   createStorage(Device* d, const uint32_t w, const uint32_t h, uint32_t mips, TextureFormat frm) = 0;
       virtual PTexture   createStorage(Device* d, const uint32_t w, const uint32_t h, const uint32_t depth, uint32_t mips, TextureFormat frm) = 0;
+      virtual SpatialScaler* createSpatialScaler(Device* d, const SpatialScalerDesc& desc);
+      virtual TemporalScaler* createTemporalScaler(Device* d, const TemporalScalerDesc& desc);
 
       virtual AccelerationStructure* createBottomAccelerationStruct(Device* d, const RtGeometry* geom, size_t geomSize);
       virtual AccelerationStructure* createTopAccelerationStruct(Device* d, const RtInstance* geom, AccelerationStructure*const* as, size_t geomSize);

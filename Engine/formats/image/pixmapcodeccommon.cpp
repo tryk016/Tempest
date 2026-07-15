@@ -258,6 +258,7 @@ bool PixmapCodecCommon::save(ODevice &f, const char *ext, const uint8_t* cdata,
     case TextureFormat::DXT5:
       break;
     case TextureFormat::R11G11B10UF:
+    case TextureFormat::RG16F:
     case TextureFormat::RGBA16F:
       // hdr or exr?
       break;

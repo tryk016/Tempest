@@ -98,6 +98,8 @@ inline VkFormat nativeFormat(TextureFormat f) {
       return VK_FORMAT_BC3_UNORM_BLOCK;
     case TextureFormat::R11G11B10UF:
       return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+    case TextureFormat::RG16F:
+      return VK_FORMAT_R16G16_SFLOAT;
     case TextureFormat::RGBA16F:
       return VK_FORMAT_R16G16B16A16_SFLOAT;
     }

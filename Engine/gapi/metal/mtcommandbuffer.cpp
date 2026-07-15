@@ -10,6 +10,12 @@
 #include "mttexture.h"
 #include "mtswapchain.h"
 #include "mtaccelerationstructure.h"
+#if defined(TEMPEST_METALFX_SPATIAL)
+#include "mtspatialscaler.h"
+#endif
+#if defined(TEMPEST_METALFX_TEMPORAL)
+#include "mttemporalscaler.h"
+#endif
 
 using namespace Tempest;
 using namespace Tempest::Detail;
@@ -795,5 +801,34 @@ void MtCommandBuffer::copy(AbstractGraphicsApi::Buffer& dest, size_t offset,
                            d.impl.get(),
                            offset, bpp*width,bpp*width*height);
   }
+
+#if defined(TEMPEST_METALFX_SPATIAL)
+bool MtCommandBuffer::spatialUpscale(AbstractGraphicsApi::SpatialScaler& scaler,
+                                     AbstractGraphicsApi::Texture& input,
+                                     AbstractGraphicsApi::Texture& output) {
+  setEncoder(E_None,nullptr);
+  auto& sx  = reinterpret_cast<MtSpatialScaler&>(scaler);
+  auto& src = reinterpret_cast<MtTexture&>(input);
+  auto& dst = reinterpret_cast<MtTexture&>(output);
+  return sx.encode(*impl,src,dst);
+  }
+#endif
+
+#if defined(TEMPEST_METALFX_TEMPORAL)
+bool MtCommandBuffer::temporalUpscale(AbstractGraphicsApi::TemporalScaler& scaler,
+                                      AbstractGraphicsApi::Texture& color,
+                                      AbstractGraphicsApi::Texture& depth,
+                                      AbstractGraphicsApi::Texture& motion,
+                                      AbstractGraphicsApi::Texture& output,
+                                      const TemporalScalerArgs& args) {
+  setEncoder(E_None,nullptr);
+  auto& sx  = reinterpret_cast<MtTemporalScaler&>(scaler);
+  auto& src = reinterpret_cast<MtTexture&>(color);
+  auto& z   = reinterpret_cast<MtTexture&>(depth);
+  auto& mv  = reinterpret_cast<MtTexture&>(motion);
+  auto& dst = reinterpret_cast<MtTexture&>(output);
+  return sx.encode(*impl,src,z,mv,dst,args);
+  }
+#endif
 
 #endif
