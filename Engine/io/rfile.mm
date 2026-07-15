@@ -17,6 +17,10 @@ void* RFile::implOpen(const char *cstr) {
     return ret;
     }
   
+  // cwd-first: user files (saves, Gothic.ini) are written to CWD == Documents
+  if(void* ret = fopen(cstr,"rb"))
+    return ret;
+
   @autoreleasepool {
     NSString *dir = [[NSBundle mainBundle] resourcePath];
     std::string full = [dir UTF8String];

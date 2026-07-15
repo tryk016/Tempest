@@ -197,9 +197,29 @@ static void drawFrame();
     swapContext();
     }
   }
+
+- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)ex {
+  [self touchesEnded:touches withEvent:ex];
+  }
 @end
 
 static TempestWindow* mainWindow = nullptr;
+
+extern "C" void tempestIosSetPreferredFrameRate(int fps) {
+  auto* window = mainWindow;
+  if(window==nil || window->displayLink==nil)
+    return;
+  if (@available(iOS 15.0, *)) {
+    if(fps==30)
+      window->displayLink.preferredFrameRateRange = CAFrameRateRangeMake(30, 30, 30);
+    else if(fps==60)
+      window->displayLink.preferredFrameRateRange = CAFrameRateRangeMake(60, 60, 60);
+    else
+      window->displayLink.preferredFrameRateRange = CAFrameRateRangeMake(30, 120, 120);
+    } else {
+    window->displayLink.preferredFramesPerSecond = fps>0 ? fps : 60;
+    }
+  }
 
 
 @interface ViewController:UIViewController{}
@@ -211,6 +231,7 @@ static TempestWindow* mainWindow = nullptr;
   }
 
 -(id)init {
+  self = [super init];
   fullScreen = true;
   return self;
   }
@@ -237,7 +258,7 @@ static TempestWindow* mainWindow = nullptr;
   }
 
 -(UIInterfaceOrientationMask)supportedInterfaceOrientations {
-  return UIInterfaceOrientationMaskAll;
+  return UIInterfaceOrientationMaskLandscape;
   }
 
 -(bool)setAsFullscreen: (bool)fullScreen {
@@ -281,7 +302,7 @@ static bool isApplicationActive = false;
 
 - (UIInterfaceOrientationMask)application:(UIApplication *)application
   supportedInterfaceOrientationsForWindow:(UIWindow *)window {
-  return UIInterfaceOrientationMaskAll;
+  return UIInterfaceOrientationMaskLandscape;
   }
 
 - (void)applicationWillResignActive:(UIApplication *)application {
@@ -300,6 +321,7 @@ static bool isApplicationActive = false;
 
 - (void)applicationDidBecomeActive:(UIApplication *)application  {
   (void)application;
+  application.idleTimerDisabled = YES;
   isApplicationActive = true;
   swapContext();
   }
@@ -318,7 +340,7 @@ static std::atomic_bool isRunning{true};
 static Fiber            mainContext;
 static Fiber            appleContext;
 static Fiber*           currentContext = nullptr;
-alignas(16) static char appleStack[1*1024*1024]={};
+alignas(16) static char appleStack[8*1024*1024]={};
 static             void appleMain(void*);
 
 inline static void createAppleSubContext()  {
@@ -378,6 +400,9 @@ static SystemApi::Window* createWindow(Tempest::Window *owner, uint32_t w, uint3
   
   window->owner = owner;
   window->displayLink = [CADisplayLink displayLinkWithTarget:window selector:@selector(drawFrame)];
+  if (@available(iOS 15.0, *)) {
+    window->displayLink.preferredFrameRateRange = CAFrameRateRangeMake(30, 120, 120);
+    }
   //by adding the display link to the run loop our draw method will be called 60 times per second
   [window->displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
   window->hasPendingFrame.store(true);
@@ -398,6 +423,12 @@ SystemApi::Window *iOSApi::implCreateWindow(Tempest::Window *owner, SystemApi::S
   }
 
 void iOSApi::implDestroyWindow(SystemApi::Window *w) {
+  auto wx = reinterpret_cast<TempestWindow*>(w);
+  if(wx==nullptr)
+    return;
+  [wx->displayLink invalidate];
+  wx->displayLink = nil;
+  wx->owner = nullptr;
   }
 
 void iOSApi::implExit() {
@@ -452,7 +483,8 @@ void iOSApi::implProcessEvents(AppCallBack& cb) {
     return;
     }
   
-  @autoreleasepool {
+  { // no-objc-pool: pool stack is per-thread and shared with the UIKit fiber; pushing here gets invalidated across swapContext (badPop/SIGABRT)
+    try {
     auto& wnd   = *mainWindow->owner;
     auto  eType = mainWindow->curentEvent;
     mainWindow->curentEvent = Event::Type::NoEvent;
@@ -484,6 +516,10 @@ void iOSApi::implProcessEvents(AppCallBack& cb) {
           }
         break;
       }
+    }
+    catch(const std::exception& e){ Tempest::Log::e("uncaught exception in iOS event dispatch: ", e.what()); }
+    catch(NSException* e){ Tempest::Log::e("uncaught NSException in iOS event dispatch: ", (e.name!=nil ? e.name.UTF8String : "?"), ": ", (e.reason!=nil ? e.reason.UTF8String : "?")); }
+    catch(...){ Tempest::Log::e("uncaught non-std/ObjC exception in iOS event dispatch"); }
     }
   swapContext();
   }
