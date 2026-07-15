@@ -53,6 +53,9 @@ using SysWindow = UIWindow;
 struct MtSwapchain::Impl {
   SysWindow* wnd  = nil;
   MetalView* view = nil;
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  CA::MetalDrawable* drawable = nullptr;
+#endif
 
   CAMetalLayer* metalLayer() {
 #if defined(__OSX__)
@@ -117,16 +120,24 @@ MtSwapchain::MtSwapchain(MtDevice& dev, SystemApi::Window *w)
   [lay setContentsScale:dpi];
 #if defined(__IOS__)
   // Swapchain takes too much memory on 2GB iPhone
-  lay.maximumDrawableCount      = 2;
+  lay.maximumDrawableCount      = 3;
 #endif
   lay.pixelFormat               = MTLPixelFormatBGRA8Unorm;
   lay.allowsNextDrawableTimeout = NO;
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  lay.framebufferOnly           = YES;
+#else
   lay.framebufferOnly           = NO;
+#endif
 
   reset();
   }
 
 MtSwapchain::~MtSwapchain() {
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  if(pimpl->drawable!=nullptr)
+    pimpl->drawable->release();
+#endif
   if(pimpl->view!=nil)
     [pimpl->view release];
   }
@@ -134,6 +145,13 @@ MtSwapchain::~MtSwapchain() {
 void MtSwapchain::reset() {
   dev.waitIdle(); // pending commands
   std::lock_guard<SpinLock> guard(sync);
+
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  if(pimpl->drawable!=nullptr) {
+    pimpl->drawable->release();
+    pimpl->drawable = nullptr;
+    }
+#endif
 
   // https://developer.apple.com/documentation/quartzcore/cametallayer?language=objc
   CAMetalLayer* lay = pimpl->metalLayer();
@@ -146,24 +164,54 @@ void MtSwapchain::reset() {
   img.resize(imgCount);
   for(size_t i=0; i<imgCount; ++i)
     img[i].tex = nullptr;
+#if !defined(TEMPEST_METAL_DIRECT_DRAWABLE)
   for(size_t i=0; i<imgCount; ++i)
     img[i].tex = mkTexture();
+#endif
 
   currentImg = 0;
   }
 
 uint32_t MtSwapchain::currentBackBufferIndex() {
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  auto pool = NsPtr<NS::AutoreleasePool>::init();
+  std::lock_guard<SpinLock> guard(sync);
+
+  // Direct-drawable v2 experiment: acquire before encoding so the main render
+  // pass targets CAMetalLayer storage instead of a private copy texture.
+  if(pimpl->drawable==nullptr) {
+    auto* lay = reinterpret_cast<CA::MetalLayer*>(pimpl->metalLayer());
+    auto* drawable = lay->nextDrawable();
+    if(drawable==nullptr)
+      throw SwapchainSuboptimal();
+
+    auto* texture = drawable->texture();
+    if(texture->width()!=size_t(sz.w) || texture->height()!=size_t(sz.h))
+      throw SwapchainSuboptimal();
+
+    drawable->retain();
+    texture->retain();
+    pimpl->drawable = drawable;
+    img[currentImg].tex = NsPtr<MTL::Texture>(texture);
+    }
+#endif
   return currentImg;
   }
 
 void MtSwapchain::present() {
   auto pool = NsPtr<NS::AutoreleasePool>::init();
   
-  CA::MetalLayer* lay      = reinterpret_cast<CA::MetalLayer*>(pimpl->metalLayer());
   uint32_t        i        = currentImg;
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  auto            drawable = pimpl->drawable;
+  if(drawable==nullptr || img[i].tex==nullptr)
+    throw SwapchainSuboptimal();
+#else
+  CA::MetalLayer* lay      = reinterpret_cast<CA::MetalLayer*>(pimpl->metalLayer());
   auto            drawable = lay->nextDrawable();
   if(drawable==nullptr)
     throw SwapchainSuboptimal();
+#endif
   
   std::lock_guard<SpinLock> guard(sync);
   auto dr = drawable->texture();
@@ -176,12 +224,14 @@ void MtSwapchain::present() {
   desc->setErrorOptions(MTL::CommandBufferErrorOptionEncoderExecutionStatus);
   
   auto cmd = dev.queue->commandBuffer(desc.get());
+#if !defined(TEMPEST_METAL_DIRECT_DRAWABLE)
   auto enc = cmd->blitCommandEncoder();
   
   enc->copyFromTexture(img[i].tex.get(), 0, 0,
                        dr, 0, 0,
                        1, 1);
   enc->endEncoding();
+#endif
   cmd->presentDrawable(drawable);
 
   dev.onSubmit();
@@ -203,6 +253,14 @@ void MtSwapchain::present() {
     dev.onFinish();
     });
   cmd->commit();
+
+#if defined(TEMPEST_METAL_DIRECT_DRAWABLE)
+  // presentDrawable retains the drawable until presentation completes. Drop
+  // the temporary CPU-side references now so CAMetalLayer can recycle it.
+  img[i].tex = nullptr;
+  pimpl->drawable = nullptr;
+  drawable->release();
+#endif
 
   nextDrawable();
   }
