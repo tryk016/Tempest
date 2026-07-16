@@ -25,6 +25,7 @@ class Window : public Widget {
 
   protected:
     virtual void render();
+    virtual void appStateEvent  (Tempest::AppStateEvent& event);
     using        Widget::dispatchPaintEvent;
     void         dispatchPaintEvent(VectorImage &e,TextureAtlas &ta);
     void         closeEvent       (Tempest::CloseEvent& event) override;
@@ -42,6 +43,7 @@ class Window : public Widget {
   friend class Widget;
   friend class UiOverlay;
   friend class EventDispatcher;
+  friend class SystemApi;
   };
 
 }

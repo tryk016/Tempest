@@ -56,6 +56,7 @@ static void drawFrame();
     MouseEvent     mouse;
     KeyEvent       key;
     CloseEvent     close;
+    AppStateEvent  appState;
     Tempest::Point move;
     } event;
   Event::Type curentEvent;
@@ -205,6 +206,19 @@ static void drawFrame();
 
 static TempestWindow* mainWindow = nullptr;
 
+static void queueAppStateEvent(AppStateEvent::State state, bool swapWithoutOwner) {
+  auto* window = mainWindow;
+  if(window==nil || window->owner==nullptr) {
+    if(swapWithoutOwner)
+      swapContext();
+    return;
+    }
+
+  new (&window->event.appState) AppStateEvent(state);
+  window->curentEvent = Event::AppState;
+  swapContext();
+  }
+
 extern "C" void tempestIosSetPreferredFrameRate(int fps) {
   auto* window = mainWindow;
   if(window==nil || window->displayLink==nil)
@@ -308,22 +322,24 @@ static bool isApplicationActive = false;
 - (void)applicationWillResignActive:(UIApplication *)application {
   (void)application;
   isApplicationActive = false;
-  swapContext();
+  queueAppStateEvent(AppStateEvent::State::WillResignActive, true);
   }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
   (void)application;
+  queueAppStateEvent(AppStateEvent::State::DidEnterBackground, false);
   }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
   (void)application;
+  queueAppStateEvent(AppStateEvent::State::WillEnterForeground, false);
   }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application  {
   (void)application;
   application.idleTimerDisabled = YES;
   isApplicationActive = true;
-  swapContext();
+  queueAppStateEvent(AppStateEvent::State::DidBecomeActive, true);
   }
 
 - (void)applicationWillTerminate:(UIApplication *)application {
@@ -507,6 +523,12 @@ void iOSApi::implProcessEvents(AppCallBack& cb) {
           iOSApi::dispatchMouseMove(wnd, evt);
         else if(eType==Event::MouseUp)
           iOSApi::dispatchMouseUp(wnd, evt);
+        break;
+        }
+      case Event::AppState: {
+        auto evt = mainWindow->event.appState;
+        mainWindow->event.appState.~AppStateEvent();
+        iOSApi::dispatchAppState(wnd, evt);
         break;
         }
       default:

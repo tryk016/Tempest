@@ -15,6 +15,7 @@ class KeyEvent;
 class CloseEvent;
 class PaintEvent;
 class FocusEvent;
+class AppStateEvent;
 
 class Widget;
 class Window;
@@ -104,6 +105,7 @@ class SystemApi {
     static void      dispatchClose     (Tempest::Window& cb, CloseEvent& e);
 
     static void      dispatchFocus     (Tempest::Window& cb, FocusEvent& e);
+    static void      dispatchAppState  (Tempest::Window& cb, AppStateEvent& e);
 
     static SystemApi& inst();
 

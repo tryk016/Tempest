@@ -34,6 +34,10 @@ void Window::setWindowTitle(const char* utf8) {
 void Window::render() {
   }
 
+void Window::appStateEvent(AppStateEvent& e) {
+  e.ignore();
+  }
+
 void Window::dispatchPaintEvent(VectorImage &surface,TextureAtlas& ta) {
   surface.clear();
 

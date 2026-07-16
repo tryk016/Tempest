@@ -152,6 +152,10 @@ void SystemApi::dispatchFocus(Tempest::Window& cb, FocusEvent& e) {
   dispatcher.dispatchFocus(cb,e);
   }
 
+void SystemApi::dispatchAppState(Tempest::Window& cb, AppStateEvent& e) {
+  cb.appStateEvent(e);
+  }
+
 bool SystemApi::isRunning() {
   return inst().implIsRunning();
   }

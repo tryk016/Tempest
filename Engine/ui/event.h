@@ -40,6 +40,7 @@ class Event {
       Close,
       Polish,
       Gesture,
+      AppState,
 
       Custom = 512
       };
@@ -291,5 +292,21 @@ class CloseEvent: public Event {
 class PolishEvent: public Event {
   public:
     PolishEvent() { setType(Polish); }
+  };
+
+class AppStateEvent: public Event {
+  public:
+    enum class State : uint8_t {
+      WillResignActive,
+      DidEnterBackground,
+      WillEnterForeground,
+      DidBecomeActive,
+      };
+
+    explicit AppStateEvent(State state): state(state) {
+      setType(AppState);
+      }
+
+    const State state;
   };
 }
