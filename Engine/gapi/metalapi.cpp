@@ -9,6 +9,7 @@
 #include <Tempest/Log>
 #include <Tempest/Pixmap>
 #include <Tempest/Device>
+#include <Tempest/Encoder>
 #include <Tempest/StorageBuffer>
 #include <Tempest/Texture2d>
 
@@ -70,6 +71,40 @@ BorrowedMetalTexture MetalApi::borrowTexture(const Tempest::Device& device,
   if(nativeTexture==nullptr || &nativeTexture->dev!=nativeDevice || nativeTexture->impl==nullptr)
     return {};
   return BorrowedMetalTexture(nativeTexture->impl.get());
+  }
+
+bool MetalApi::withActiveRenderEncoder(
+    const Tempest::Device& device,
+    Tempest::Encoder<Tempest::CommandBuffer>& encoder,
+    void* context,
+    MetalRenderEncodeCallback callback) {
+  auto* nativeDevice  = dynamic_cast<MtDevice*>(device.dev);
+  auto* nativeCommand = dynamic_cast<MtCommandBuffer*>(encoder.impl);
+  if(nativeDevice==nullptr || nativeCommand==nullptr ||
+     &nativeCommand->device!=nativeDevice ||
+     nativeCommand->encDraw==nullptr || callback==nullptr)
+    return false;
+
+  const auto invalidateState = [&]() noexcept {
+    encoder.state.curPipeline = nullptr;
+    encoder.state.curCompute  = nullptr;
+    nativeCommand->curDrawPipeline = nullptr;
+    nativeCommand->curCompPipeline = nullptr;
+    nativeCommand->curLay           = nullptr;
+    nativeCommand->bindings.durty   = true;
+    nativeCommand->pushData.durty   = true;
+    };
+
+  invalidateState();
+  try {
+    callback(context,nativeCommand->encDraw.get());
+    }
+  catch(...) {
+    invalidateState();
+    throw;
+    }
+  invalidateState();
+  return true;
   }
 
 std::vector<AbstractGraphicsApi::Props> MetalApi::devices() const {

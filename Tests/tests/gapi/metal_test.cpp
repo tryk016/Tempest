@@ -8,6 +8,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock-matchers.h>
 
+#include <stdexcept>
+
 #include "gapi_test_common.h"
 
 #if defined(__OSX__)
@@ -16,6 +18,23 @@
 
 using namespace testing;
 using namespace Tempest;
+
+#if defined(__OSX__)
+namespace {
+
+void observeActiveRenderEncoder(void* context,
+                                MTL::RenderCommandEncoder* encoder) {
+  auto& called = *static_cast<bool*>(context);
+  called = encoder!=nullptr;
+  }
+
+void throwFromActiveRenderEncoder(void*,
+                                  MTL::RenderCommandEncoder*) {
+  throw std::runtime_error("active render encoder callback");
+  }
+
+}
+#endif
 
 TEST(MetalApi,MetalApi) {
 #if defined(__OSX__)
@@ -86,6 +105,71 @@ TEST(MetalApi,BorrowedNativeHandles) {
   catch(std::system_error& e) {
     if(e.code()==Tempest::GraphicsErrc::NoDevice)
       Log::d("Skipping Metal borrowed native handle testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,ActiveRenderEncoderScope) {
+#if defined(__OSX__)
+  try {
+    MetalApi api{ApiFlags::Validation};
+    Device device(api);
+    Device foreignDevice(api);
+
+    auto vbo  = device.vbo(GapiTestCommon::vboData,3);
+    auto ibo  = device.ibo(GapiTestCommon::iboData,3);
+    auto vert = device.shader("shader/simple_test.vert.sprv");
+    auto frag = device.shader("shader/simple_test.frag.sprv");
+    auto pso  = device.pipeline(
+        Topology::Triangles,RenderState(),vert,frag);
+    auto target  = device.attachment(TextureFormat::RGBA8,4,4);
+    auto command = device.commandBuffer();
+    {
+      auto encoder = command.startEncoding(device);
+      bool called = false;
+      EXPECT_FALSE(MetalApi::withActiveRenderEncoder(
+          device,encoder,&called,observeActiveRenderEncoder));
+      EXPECT_FALSE(called);
+
+      encoder.setFramebuffer(
+          {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      encoder.setPipeline(pso);
+      encoder.draw(vbo,ibo);
+
+      EXPECT_FALSE(MetalApi::withActiveRenderEncoder(
+          device,encoder,nullptr,nullptr));
+      EXPECT_FALSE(MetalApi::withActiveRenderEncoder(
+          foreignDevice,encoder,&called,observeActiveRenderEncoder));
+      EXPECT_FALSE(called);
+
+      EXPECT_TRUE(MetalApi::withActiveRenderEncoder(
+          device,encoder,&called,observeActiveRenderEncoder));
+      EXPECT_TRUE(called);
+      encoder.setPipeline(pso);
+      encoder.draw(vbo,ibo);
+
+      EXPECT_THROW(
+          (void)MetalApi::withActiveRenderEncoder(
+              device,encoder,nullptr,throwFromActiveRenderEncoder),
+          std::runtime_error);
+      encoder.setPipeline(pso);
+      encoder.draw(vbo,ibo);
+
+      called = false;
+      EXPECT_TRUE(MetalApi::withActiveRenderEncoder(
+          device,encoder,&called,observeActiveRenderEncoder));
+      EXPECT_TRUE(called);
+      encoder.setPipeline(pso);
+      encoder.draw(vbo,ibo);
+      }
+
+    auto sync = device.submit(command);
+    sync.wait();
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal active render encoder testcase: ",e.what()); else
       throw;
     }
 #endif

@@ -55,4 +55,20 @@ static_assert(noexcept(Tempest::MetalApi::borrowTexture(
     std::declval<const Tempest::Device&>(),
     std::declval<const Tempest::Texture2d&>())));
 
+static_assert(std::is_same_v<
+              Tempest::MetalRenderEncodeCallback,
+              void (*)(void*,MTL::RenderCommandEncoder*)>);
+static_assert(std::is_same_v<
+              decltype(Tempest::MetalApi::withActiveRenderEncoder(
+                  std::declval<const Tempest::Device&>(),
+                  std::declval<Tempest::Encoder<Tempest::CommandBuffer>&>(),
+                  nullptr,
+                  std::declval<Tempest::MetalRenderEncodeCallback>())),
+              bool>);
+static_assert(!noexcept(Tempest::MetalApi::withActiveRenderEncoder(
+    std::declval<const Tempest::Device&>(),
+    std::declval<Tempest::Encoder<Tempest::CommandBuffer>&>(),
+    nullptr,
+    std::declval<Tempest::MetalRenderEncodeCallback>())));
+
 }

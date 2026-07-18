@@ -6,14 +6,18 @@ namespace MTL {
 class Device;
 class Buffer;
 class Texture;
+class RenderCommandEncoder;
 }
 
 namespace Tempest {
 
+class CommandBuffer;
 class Device;
 class StorageBuffer;
 class Texture2d;
 class MetalApi;
+template<class T>
+class Encoder;
 
 // Non-owning Metal view. The pointer is valid only while the originating
 // Tempest device or resource remains alive and must never be released.
@@ -44,6 +48,14 @@ class BorrowedMetalHandle final {
 using BorrowedMetalDevice  = BorrowedMetalHandle<MTL::Device>;
 using BorrowedMetalBuffer  = BorrowedMetalHandle<MTL::Buffer>;
 using BorrowedMetalTexture = BorrowedMetalHandle<MTL::Texture>;
+// Invoked synchronously for the active Tempest render pass. The callback must
+// neither retain nor release the encoder, end encoding, submit the command
+// buffer, nor re-enter Tempest through this command encoder. Tempest pipeline
+// and resource caches are invalidated before the callback, on return, and on
+// exception, so callers must set a pipeline again before a later Tempest draw.
+// The callback must restore or balance every dynamic or debug encoder state
+// that it changes, such as viewport, scissor, winding, bias, or debug groups.
+using MetalRenderEncodeCallback = void (*)(void*,MTL::RenderCommandEncoder*);
 
 class MetalApi : public AbstractGraphicsApi {
   public:
@@ -60,6 +72,12 @@ class MetalApi : public AbstractGraphicsApi {
     [[nodiscard]]
     static BorrowedMetalTexture borrowTexture(const Tempest::Device& device,
                                                const Texture2d& texture) noexcept;
+    [[nodiscard]]
+    static bool withActiveRenderEncoder(
+        const Tempest::Device& device,
+        Tempest::Encoder<Tempest::CommandBuffer>& encoder,
+        void* context,
+        MetalRenderEncodeCallback callback);
 
   protected:
     Device*        createDevice(std::string_view gpuName) override;
