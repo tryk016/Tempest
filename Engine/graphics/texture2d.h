@@ -7,6 +7,7 @@ namespace Tempest {
 
 class Device;
 class DescriptorSet;
+class MetalApi;
 template<class T>
 class Encoder;
 class StorageImage;
@@ -39,6 +40,7 @@ class Texture2d final {
 
   friend class Tempest::Device;
   friend class Tempest::DescriptorSet;
+  friend class Tempest::MetalApi;
   friend class Encoder<Tempest::CommandBuffer>;
   friend class Tempest::StorageImage;
 

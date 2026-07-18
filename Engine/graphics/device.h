@@ -194,6 +194,7 @@ class Device {
   friend class CommandPool;
   friend class CommandBuffer;
   friend class DescriptorSet;
+  friend class MetalApi;
 
   friend class Texture2d;
   };

@@ -10,6 +10,10 @@
 
 #include "gapi_test_common.h"
 
+#if defined(__OSX__)
+#include <Metal/Metal.hpp>
+#endif
+
 using namespace testing;
 using namespace Tempest;
 
@@ -34,6 +38,56 @@ TEST(MetalApi,VboInit) {
 TEST(MetalApi,VboDyn) {
 #if defined(__OSX__)
   GapiTestCommon::VboDyn<MetalApi>();
+#endif
+  }
+
+TEST(MetalApi,BorrowedNativeHandles) {
+#if defined(__OSX__)
+  try {
+    MetalApi api{ApiFlags::Validation};
+    Device device(api);
+    Device foreignDevice(api);
+
+    auto buffer  = device.ssbo(Uninitialized,64);
+    auto vbo     = device.vbo(GapiTestCommon::vboData,3);
+    auto ibo     = device.ibo(GapiTestCommon::iboData,3);
+    auto pixmap  = Pixmap(1,1,TextureFormat::RGBA8);
+    auto texture = device.texture(pixmap,false);
+
+    const auto nativeDevice  = MetalApi::borrowDevice(device);
+    const auto nativeBuffer  = MetalApi::borrowBuffer(device,buffer);
+    const auto nativeVbo     = MetalApi::borrowBuffer(device,vbo);
+    const auto nativeIbo     = MetalApi::borrowBuffer(device,ibo);
+    const auto nativeTexture = MetalApi::borrowTexture(device,texture);
+
+    EXPECT_TRUE(nativeDevice);
+    EXPECT_TRUE(nativeBuffer);
+    EXPECT_TRUE(nativeVbo);
+    EXPECT_TRUE(nativeIbo);
+    EXPECT_TRUE(nativeTexture);
+    EXPECT_EQ(nativeBuffer.get()->device(),nativeDevice.get());
+    EXPECT_EQ(nativeVbo.get()->device(),nativeDevice.get());
+    EXPECT_EQ(nativeIbo.get()->device(),nativeDevice.get());
+    EXPECT_EQ(nativeTexture.get()->device(),nativeDevice.get());
+
+    EXPECT_EQ(MetalApi::borrowDevice(device).get(),nativeDevice.get());
+    EXPECT_EQ(MetalApi::borrowBuffer(device,buffer).get(),nativeBuffer.get());
+    EXPECT_EQ(MetalApi::borrowBuffer(device,ibo).get(),nativeIbo.get());
+    EXPECT_EQ(MetalApi::borrowTexture(device,texture).get(),nativeTexture.get());
+
+    const StorageBuffer emptyBuffer;
+    const Texture2d     emptyTexture;
+    EXPECT_FALSE(MetalApi::borrowBuffer(device,emptyBuffer));
+    EXPECT_FALSE(MetalApi::borrowTexture(device,emptyTexture));
+
+    EXPECT_FALSE(MetalApi::borrowBuffer(foreignDevice,buffer));
+    EXPECT_FALSE(MetalApi::borrowTexture(foreignDevice,texture));
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal borrowed native handle testcase: ",e.what()); else
+      throw;
+    }
 #endif
   }
 

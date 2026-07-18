@@ -8,6 +8,9 @@
 
 #include <Tempest/Log>
 #include <Tempest/Pixmap>
+#include <Tempest/Device>
+#include <Tempest/StorageBuffer>
+#include <Tempest/Texture2d>
 
 #include "gapi/metal/mtdevice.h"
 #include "gapi/metal/mtbuffer.h"
@@ -36,6 +39,37 @@ MetalApi::MetalApi(ApiFlags f) {
   }
 
 MetalApi::~MetalApi() {
+  }
+
+BorrowedMetalDevice MetalApi::borrowDevice(const Tempest::Device& device) noexcept {
+  auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  if(nativeDevice==nullptr || nativeDevice->impl==nullptr)
+    return {};
+  return BorrowedMetalDevice(nativeDevice->impl.get());
+  }
+
+BorrowedMetalBuffer MetalApi::borrowBuffer(const Tempest::Device& device,
+                                           const StorageBuffer& buffer) noexcept {
+  auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  if(nativeDevice==nullptr)
+    return {};
+
+  auto* nativeBuffer = dynamic_cast<MtBuffer*>(buffer.impl.impl.handler);
+  if(nativeBuffer==nullptr || nativeBuffer->dev!=nativeDevice || nativeBuffer->impl==nullptr)
+    return {};
+  return BorrowedMetalBuffer(nativeBuffer->impl.get());
+  }
+
+BorrowedMetalTexture MetalApi::borrowTexture(const Tempest::Device& device,
+                                             const Texture2d& texture) noexcept {
+  auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  if(nativeDevice==nullptr)
+    return {};
+
+  auto* nativeTexture = dynamic_cast<MtTexture*>(texture.impl.handler);
+  if(nativeTexture==nullptr || &nativeTexture->dev!=nativeDevice || nativeTexture->impl==nullptr)
+    return {};
+  return BorrowedMetalTexture(nativeTexture->impl.get());
   }
 
 std::vector<AbstractGraphicsApi::Props> MetalApi::devices() const {

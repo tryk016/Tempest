@@ -29,6 +29,7 @@ class StorageBuffer {
   friend class Tempest::CommandBuffer;
   friend class Tempest::DescriptorSet;
   friend class Tempest::Encoder<Tempest::CommandBuffer>;
+  friend class Tempest::MetalApi;
 
   template<class T>
   friend class VertexBuffer;

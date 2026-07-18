@@ -2,7 +2,48 @@
 
 #include <Tempest/AbstractGraphicsApi>
 
+namespace MTL {
+class Device;
+class Buffer;
+class Texture;
+}
+
 namespace Tempest {
+
+class Device;
+class StorageBuffer;
+class Texture2d;
+class MetalApi;
+
+// Non-owning Metal view. The pointer is valid only while the originating
+// Tempest device or resource remains alive and must never be released.
+template<class T>
+class BorrowedMetalHandle final {
+  public:
+    constexpr BorrowedMetalHandle() noexcept = default;
+
+    [[nodiscard]]
+    constexpr T* get() const noexcept {
+      return value;
+      }
+
+    constexpr explicit operator bool() const noexcept {
+      return value!=nullptr;
+      }
+
+  private:
+    constexpr explicit BorrowedMetalHandle(T* value) noexcept
+      :value(value) {
+      }
+
+    T* value = nullptr;
+
+  friend class MetalApi;
+  };
+
+using BorrowedMetalDevice  = BorrowedMetalHandle<MTL::Device>;
+using BorrowedMetalBuffer  = BorrowedMetalHandle<MTL::Buffer>;
+using BorrowedMetalTexture = BorrowedMetalHandle<MTL::Texture>;
 
 class MetalApi : public AbstractGraphicsApi {
   public:
@@ -10,6 +51,15 @@ class MetalApi : public AbstractGraphicsApi {
     ~MetalApi();
 
     std::vector<Props> devices() const override;
+
+    [[nodiscard]]
+    static BorrowedMetalDevice  borrowDevice (const Tempest::Device& device) noexcept;
+    [[nodiscard]]
+    static BorrowedMetalBuffer  borrowBuffer (const Tempest::Device& device,
+                                               const StorageBuffer& buffer) noexcept;
+    [[nodiscard]]
+    static BorrowedMetalTexture borrowTexture(const Tempest::Device& device,
+                                               const Texture2d& texture) noexcept;
 
   protected:
     Device*        createDevice(std::string_view gpuName) override;
