@@ -8,7 +8,9 @@
 #include <Metal/Metal.hpp>
 #include <Foundation/Foundation.hpp>
 
+#include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 
@@ -273,6 +275,26 @@ class MtDevice : public AbstractGraphicsApi::Device {
     PresentFailure takePresentFailure() noexcept override;
     std::shared_ptr<MtAsyncState> asyncState() const noexcept { return async; }
 
+    void noteSourceLibraryRequest() noexcept {
+      sourceLibraryRequestCount.fetch_add(1,std::memory_order_relaxed);
+      }
+    void noteComputePsoRequest() noexcept {
+      computePsoRequestCount.fetch_add(1,std::memory_order_relaxed);
+      }
+    void noteRenderPsoRequest() noexcept {
+      renderPsoRequestCount.fetch_add(1,std::memory_order_relaxed);
+      }
+
+    uint64_t sourceLibraryRequests() const noexcept {
+      return sourceLibraryRequestCount.load(std::memory_order_relaxed);
+      }
+    uint64_t computePsoRequests() const noexcept {
+      return computePsoRequestCount.load(std::memory_order_relaxed);
+      }
+    uint64_t renderPsoRequests() const noexcept {
+      return renderPsoRequestCount.load(std::memory_order_relaxed);
+      }
+
     std::shared_ptr<MtFence> findAvailableFence();
     void                     waitAny(std::unique_lock<std::mutex>& guard);
     std::shared_ptr<MtFence> aquireFence();
@@ -293,6 +315,11 @@ class MtDevice : public AbstractGraphicsApi::Device {
     bool                       validation = false;
 
     static void deductProps(AbstractGraphicsApi::Props& prop, MTL::Device& dev);
+
+  private:
+    std::atomic<uint64_t> sourceLibraryRequestCount = 0;
+    std::atomic<uint64_t> computePsoRequestCount    = 0;
+    std::atomic<uint64_t> renderPsoRequestCount     = 0;
   };
 
 inline void mtAssert(void* obj, NS::Error* err) {

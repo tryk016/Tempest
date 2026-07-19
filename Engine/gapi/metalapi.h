@@ -2,6 +2,8 @@
 
 #include <Tempest/AbstractGraphicsApi>
 
+#include <cstdint>
+
 namespace MTL {
 class Device;
 class Buffer;
@@ -57,6 +59,13 @@ using BorrowedMetalTexture = BorrowedMetalHandle<MTL::Texture>;
 // that it changes, such as viewport, scissor, winding, bias, or debug groups.
 using MetalRenderEncodeCallback = void (*)(void*,MTL::RenderCommandEncoder*);
 
+struct MetalRuntimeCompilationSnapshot final {
+  bool     available             = false;
+  uint64_t sourceLibraryRequests = 0;
+  uint64_t computePsoRequests    = 0;
+  uint64_t renderPsoRequests     = 0;
+  };
+
 class MetalApi : public AbstractGraphicsApi {
   public:
     explicit MetalApi(ApiFlags f=ApiFlags::NoFlags);
@@ -72,6 +81,9 @@ class MetalApi : public AbstractGraphicsApi {
     [[nodiscard]]
     static BorrowedMetalTexture borrowTexture(const Tempest::Device& device,
                                                const Texture2d& texture) noexcept;
+    [[nodiscard]]
+    static MetalRuntimeCompilationSnapshot
+        runtimeCompilationSnapshot(const Tempest::Device& device) noexcept;
     [[nodiscard]]
     static bool withActiveRenderEncoder(
         const Tempest::Device& device,

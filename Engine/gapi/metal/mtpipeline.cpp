@@ -112,6 +112,7 @@ MTL::RenderPipelineState& MtPipeline::inst(const MtFboLayout& lay, size_t stride
     mdesc->setDepthAttachmentPixelFormat(lay.depthFormat);
 
     NS::Error* error = nullptr;
+    device.noteRenderPsoRequest();
     ix.pso = NsPtr<MTL::RenderPipelineState>(device.impl->newRenderPipelineState(mdesc.get(),MTL::PipelineOptionNone,nullptr,&error));
     mtAssert(ix.pso.get(),error);
     } else {
@@ -119,6 +120,7 @@ MTL::RenderPipelineState& MtPipeline::inst(const MtFboLayout& lay, size_t stride
     pdesc->setDepthAttachmentPixelFormat(lay.depthFormat);
 
     NS::Error* error = nullptr;
+    device.noteRenderPsoRequest();
     ix.pso = NsPtr<MTL::RenderPipelineState>(device.impl->newRenderPipelineState(pdesc.get(),&error));
     mtAssert(ix.pso.get(),error);
     }
@@ -224,6 +226,7 @@ MtCompPipeline::MtCompPipeline(MtDevice &device, const MtShader &sh)
     }
 
   NS::Error* error = nullptr;
+  device.noteComputePsoRequest();
   impl = NsPtr<MTL::ComputePipelineState>(device.impl->newComputePipelineState(desc.get(), MTL::PipelineOptionNone, nullptr, &error));
   if(error!=nullptr) {
     const char* e = error->localizedDescription()->utf8String();
@@ -243,4 +246,3 @@ size_t MtCompPipeline::sizeofBuffer(size_t id, size_t arraylen) const {
   }
 
 #endif
-

@@ -73,6 +73,20 @@ BorrowedMetalTexture MetalApi::borrowTexture(const Tempest::Device& device,
   return BorrowedMetalTexture(nativeTexture->impl.get());
   }
 
+MetalRuntimeCompilationSnapshot
+MetalApi::runtimeCompilationSnapshot(const Tempest::Device& device) noexcept {
+  const auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  if(nativeDevice==nullptr)
+    return {};
+
+  MetalRuntimeCompilationSnapshot snapshot;
+  snapshot.available             = true;
+  snapshot.sourceLibraryRequests = nativeDevice->sourceLibraryRequests();
+  snapshot.computePsoRequests    = nativeDevice->computePsoRequests();
+  snapshot.renderPsoRequests     = nativeDevice->renderPsoRequests();
+  return snapshot;
+  }
+
 bool MetalApi::withActiveRenderEncoder(
     const Tempest::Device& device,
     Tempest::Encoder<Tempest::CommandBuffer>& encoder,

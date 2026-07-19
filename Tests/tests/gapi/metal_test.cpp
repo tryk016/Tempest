@@ -110,6 +110,74 @@ TEST(MetalApi,BorrowedNativeHandles) {
 #endif
   }
 
+TEST(MetalApi,RuntimeCompilationCounters) {
+#if defined(__OSX__)
+  try {
+    MetalApi api{ApiFlags::Validation};
+    Device device(api);
+
+    const auto initial = MetalApi::runtimeCompilationSnapshot(device);
+    ASSERT_TRUE(initial.available);
+
+    auto vert = device.shader("shader/simple_test.vert.sprv");
+    auto frag = device.shader("shader/simple_test.frag.sprv");
+    auto comp = device.shader("shader/ssbo_read.comp.sprv");
+    const auto afterShaders = MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterShaders.sourceLibraryRequests,
+              initial.sourceLibraryRequests+3);
+    EXPECT_EQ(afterShaders.computePsoRequests,initial.computePsoRequests);
+    EXPECT_EQ(afterShaders.renderPsoRequests,initial.renderPsoRequests);
+
+    auto compute = device.pipeline(comp);
+    (void)compute;
+    const auto afterCompute = MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterCompute.sourceLibraryRequests,
+              afterShaders.sourceLibraryRequests);
+    EXPECT_EQ(afterCompute.computePsoRequests,
+              afterShaders.computePsoRequests+1);
+    EXPECT_EQ(afterCompute.renderPsoRequests,afterShaders.renderPsoRequests);
+
+    auto render = device.pipeline(
+        Topology::Triangles,RenderState(),vert,frag);
+    const auto afterRenderWrapper =
+        MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterRenderWrapper.sourceLibraryRequests,
+              afterCompute.sourceLibraryRequests);
+    EXPECT_EQ(afterRenderWrapper.computePsoRequests,
+              afterCompute.computePsoRequests);
+    EXPECT_EQ(afterRenderWrapper.renderPsoRequests,
+              afterCompute.renderPsoRequests);
+
+    auto target  = device.attachment(TextureFormat::RGBA8,4,4);
+    auto command = device.commandBuffer();
+    {
+      auto encoder = command.startEncoding(device);
+      encoder.setFramebuffer(
+          {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      encoder.setPipeline(render);
+      const auto afterFirstUse =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(afterFirstUse.renderPsoRequests,
+                afterRenderWrapper.renderPsoRequests+1);
+
+      encoder.setPipeline(render);
+      const auto afterCachedUse =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(afterCachedUse.renderPsoRequests,
+                afterFirstUse.renderPsoRequests);
+      }
+
+    auto sync = device.submit(command);
+    sync.wait();
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal runtime compilation counters testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
 TEST(MetalApi,ActiveRenderEncoderScope) {
 #if defined(__OSX__)
   try {

@@ -129,6 +129,7 @@ MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
   NS::Error* err = nullptr;
   auto       str = NsPtr<NS::String>(NS::String::string(msl.c_str(),NS::UTF8StringEncoding));
   str->retain();
+  dev.noteSourceLibraryRequest();
   library = NsPtr<MTL::Library>(dev.impl->newLibrary(str.get(), opt.get(), &err));
 
   if(err!=nullptr) {

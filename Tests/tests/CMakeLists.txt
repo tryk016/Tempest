@@ -13,6 +13,10 @@ add_test(${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PRIVATE .)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/../../Engine/include")
+if(APPLE)
+  target_include_directories(${PROJECT_NAME} PRIVATE
+    "${CMAKE_SOURCE_DIR}/../../Engine/thirdparty/metal-cpp")
+endif()
 
 add_definitions(-DGTEST_LANG_CXX11=1)
 if(MSVC)

@@ -8,6 +8,7 @@ namespace {
 using Tempest::BorrowedMetalBuffer;
 using Tempest::BorrowedMetalDevice;
 using Tempest::BorrowedMetalTexture;
+using Tempest::MetalRuntimeCompilationSnapshot;
 
 template<class Handle, class Native>
 constexpr bool isBorrowedHandleContract =
@@ -30,6 +31,15 @@ static_assert(isBorrowedHandleContract<BorrowedMetalTexture, MTL::Texture>);
 
 static_assert(!std::is_same_v<BorrowedMetalDevice, BorrowedMetalBuffer>);
 static_assert(!std::is_same_v<BorrowedMetalBuffer, BorrowedMetalTexture>);
+
+static_assert(std::is_trivially_copyable_v<MetalRuntimeCompilationSnapshot>);
+static_assert(std::is_standard_layout_v<MetalRuntimeCompilationSnapshot>);
+static_assert(std::is_default_constructible_v<MetalRuntimeCompilationSnapshot>);
+constexpr MetalRuntimeCompilationSnapshot emptySnapshot;
+static_assert(!emptySnapshot.available);
+static_assert(emptySnapshot.sourceLibraryRequests==0);
+static_assert(emptySnapshot.computePsoRequests==0);
+static_assert(emptySnapshot.renderPsoRequests==0);
 
 static_assert(std::is_same_v<
               decltype(Tempest::MetalApi::borrowDevice(
@@ -54,6 +64,12 @@ static_assert(noexcept(Tempest::MetalApi::borrowBuffer(
 static_assert(noexcept(Tempest::MetalApi::borrowTexture(
     std::declval<const Tempest::Device&>(),
     std::declval<const Tempest::Texture2d&>())));
+static_assert(std::is_same_v<
+              decltype(Tempest::MetalApi::runtimeCompilationSnapshot(
+                  std::declval<const Tempest::Device&>())),
+              MetalRuntimeCompilationSnapshot>);
+static_assert(noexcept(Tempest::MetalApi::runtimeCompilationSnapshot(
+    std::declval<const Tempest::Device&>())));
 
 static_assert(std::is_same_v<
               Tempest::MetalRenderEncodeCallback,
