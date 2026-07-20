@@ -2,6 +2,8 @@
 
 #include <Tempest/AbstractGraphicsApi>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace MTL {
@@ -66,6 +68,54 @@ struct MetalRuntimeCompilationSnapshot final {
   uint64_t renderPsoRequests     = 0;
   };
 
+enum class MetalBuiltinSourceRole : uint8_t {
+  ColorVertex     = 0,
+  ColorFragment   = 1,
+  TextureVertex   = 2,
+  TextureFragment = 3,
+  Count           = 4,
+  None = 0xFF,
+  };
+
+enum class MetalBuiltinRenderRole : uint8_t {
+  ColorLinesOpaque          = 0,
+  ColorTrianglesOpaque      = 1,
+  ColorLinesAlpha           = 2,
+  ColorTrianglesAlpha       = 3,
+  ColorLinesAdditive        = 4,
+  ColorTrianglesAdditive    = 5,
+  TextureLinesOpaque        = 6,
+  TextureTrianglesOpaque    = 7,
+  TextureLinesAlpha         = 8,
+  TextureTrianglesAlpha     = 9,
+  TextureLinesAdditive      = 10,
+  TextureTrianglesAdditive  = 11,
+  Count                     = 12,
+  None = 0xFF,
+  };
+
+[[nodiscard]]
+constexpr size_t metalBuiltinSourceRoleIndex(
+    MetalBuiltinSourceRole role) noexcept {
+  return static_cast<size_t>(role);
+  }
+
+[[nodiscard]]
+constexpr size_t metalBuiltinRenderRoleIndex(
+    MetalBuiltinRenderRole role) noexcept {
+  return static_cast<size_t>(role);
+  }
+
+struct MetalBuiltinRuntimeSnapshot final {
+  bool available = false;
+  std::array<uint64_t,
+             metalBuiltinSourceRoleIndex(MetalBuiltinSourceRole::Count)>
+      sourceLibraryRequests = {};
+  std::array<uint64_t,
+             metalBuiltinRenderRoleIndex(MetalBuiltinRenderRole::Count)>
+      renderPsoRequests = {};
+  };
+
 class MetalApi : public AbstractGraphicsApi {
   public:
     explicit MetalApi(ApiFlags f=ApiFlags::NoFlags);
@@ -84,6 +134,9 @@ class MetalApi : public AbstractGraphicsApi {
     [[nodiscard]]
     static MetalRuntimeCompilationSnapshot
         runtimeCompilationSnapshot(const Tempest::Device& device) noexcept;
+    [[nodiscard]]
+    static MetalBuiltinRuntimeSnapshot
+        builtinRuntimeSnapshot(const Tempest::Device& device) noexcept;
     [[nodiscard]]
     static bool withActiveRenderEncoder(
         const Tempest::Device& device,

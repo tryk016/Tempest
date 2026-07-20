@@ -2,6 +2,7 @@
 
 #include <Tempest/AbstractGraphicsApi>
 #include <Tempest/AccelerationStructure>
+#include <Tempest/MetalApi>
 #include <Tempest/RenderState>
 #include <Tempest/Except>
 
@@ -284,6 +285,20 @@ class MtDevice : public AbstractGraphicsApi::Device {
     void noteRenderPsoRequest() noexcept {
       renderPsoRequestCount.fetch_add(1,std::memory_order_relaxed);
       }
+    void noteBuiltinSourceLibraryRequest(
+        MetalBuiltinSourceRole role) noexcept {
+      const size_t index = metalBuiltinSourceRoleIndex(role);
+      if(index<builtinSourceLibraryRequestCount.size())
+        builtinSourceLibraryRequestCount[index].fetch_add(
+            1,std::memory_order_relaxed);
+      }
+    void noteBuiltinRenderPsoRequest(
+        MetalBuiltinRenderRole role) noexcept {
+      const size_t index = metalBuiltinRenderRoleIndex(role);
+      if(index<builtinRenderPsoRequestCount.size())
+        builtinRenderPsoRequestCount[index].fetch_add(
+            1,std::memory_order_relaxed);
+      }
 
     uint64_t sourceLibraryRequests() const noexcept {
       return sourceLibraryRequestCount.load(std::memory_order_relaxed);
@@ -293,6 +308,22 @@ class MtDevice : public AbstractGraphicsApi::Device {
       }
     uint64_t renderPsoRequests() const noexcept {
       return renderPsoRequestCount.load(std::memory_order_relaxed);
+      }
+    uint64_t builtinSourceLibraryRequests(
+        MetalBuiltinSourceRole role) const noexcept {
+      const size_t index = metalBuiltinSourceRoleIndex(role);
+      if(index>=builtinSourceLibraryRequestCount.size())
+        return 0;
+      return builtinSourceLibraryRequestCount[index].load(
+          std::memory_order_relaxed);
+      }
+    uint64_t builtinRenderPsoRequests(
+        MetalBuiltinRenderRole role) const noexcept {
+      const size_t index = metalBuiltinRenderRoleIndex(role);
+      if(index>=builtinRenderPsoRequestCount.size())
+        return 0;
+      return builtinRenderPsoRequestCount[index].load(
+          std::memory_order_relaxed);
       }
 
     std::shared_ptr<MtFence> findAvailableFence();
@@ -320,6 +351,12 @@ class MtDevice : public AbstractGraphicsApi::Device {
     std::atomic<uint64_t> sourceLibraryRequestCount = 0;
     std::atomic<uint64_t> computePsoRequestCount    = 0;
     std::atomic<uint64_t> renderPsoRequestCount     = 0;
+    std::array<std::atomic<uint64_t>,
+               metalBuiltinSourceRoleIndex(MetalBuiltinSourceRole::Count)>
+        builtinSourceLibraryRequestCount = {};
+    std::array<std::atomic<uint64_t>,
+               metalBuiltinRenderRoleIndex(MetalBuiltinRenderRole::Count)>
+        builtinRenderPsoRequestCount = {};
   };
 
 inline void mtAssert(void* obj, NS::Error* err) {

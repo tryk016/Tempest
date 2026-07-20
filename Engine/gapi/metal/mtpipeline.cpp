@@ -5,6 +5,7 @@
 #include <Tempest/Log>
 
 #include "mtdevice.h"
+#include "mtbuiltinruntime.h"
 #include "mtshader.h"
 #include "mtfbolayout.h"
 #include "mtpipelinelay.h"
@@ -22,6 +23,13 @@ MtPipeline::MtPipeline(MtDevice &d, Topology tp, const RenderState &rs,
   for(size_t i=0; i<count; ++i)
     if(sh[i]!=nullptr)
       modules[i] = Detail::DSharedPtr<const MtShader*>{sh[i]};
+
+  const auto* vertex   = findShader(ShaderReflection::Vertex);
+  const auto* fragment = findShader(ShaderReflection::Fragment);
+  if(vertex!=nullptr && fragment!=nullptr) {
+    builtinRenderRole = classifyMetalBuiltinRenderRole(
+        vertex->builtinSourceRole,fragment->builtinSourceRole,tp,rs);
+    }
 
   cullMode = nativeFormat(rs.cullFaceMode());
   topology = nativeFormat(tp);
@@ -113,6 +121,7 @@ MTL::RenderPipelineState& MtPipeline::inst(const MtFboLayout& lay, size_t stride
 
     NS::Error* error = nullptr;
     device.noteRenderPsoRequest();
+    device.noteBuiltinRenderPsoRequest(builtinRenderRole);
     ix.pso = NsPtr<MTL::RenderPipelineState>(device.impl->newRenderPipelineState(mdesc.get(),MTL::PipelineOptionNone,nullptr,&error));
     mtAssert(ix.pso.get(),error);
     } else {
@@ -121,6 +130,7 @@ MTL::RenderPipelineState& MtPipeline::inst(const MtFboLayout& lay, size_t stride
 
     NS::Error* error = nullptr;
     device.noteRenderPsoRequest();
+    device.noteBuiltinRenderPsoRequest(builtinRenderRole);
     ix.pso = NsPtr<MTL::RenderPipelineState>(device.impl->newRenderPipelineState(pdesc.get(),&error));
     mtAssert(ix.pso.get(),error);
     }

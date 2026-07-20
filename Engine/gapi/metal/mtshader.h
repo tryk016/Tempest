@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Tempest/AbstractGraphicsApi>
+#include <Tempest/MetalApi>
 
 #include "gapi/shader.h"
 
@@ -24,6 +25,8 @@ class MtShader : public Detail::Shader {
 
     NsPtr<MTL::Library>  library;
     NsPtr<MTL::Function> impl;
+    MetalBuiltinSourceRole builtinSourceRole =
+        MetalBuiltinSourceRole::None;
     bool                 bufferSizeBuffer = false;
   };
 

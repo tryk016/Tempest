@@ -56,6 +56,8 @@ class MtPipeline : public AbstractGraphicsApi::Pipeline {
 
     MtDevice&                            device;
     Tempest::RenderState                 rs;
+    MetalBuiltinRenderRole               builtinRenderRole =
+        MetalBuiltinRenderRole::None;
 
     NsPtr<MTL::VertexDescriptor>         vdesc;
     NsPtr<MTL::RenderPipelineDescriptor> pdesc;
@@ -83,4 +85,3 @@ class MtCompPipeline : public AbstractGraphicsApi::CompPipeline {
 
 }
 }
-

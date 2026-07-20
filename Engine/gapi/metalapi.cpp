@@ -87,6 +87,27 @@ MetalApi::runtimeCompilationSnapshot(const Tempest::Device& device) noexcept {
   return snapshot;
   }
 
+MetalBuiltinRuntimeSnapshot
+MetalApi::builtinRuntimeSnapshot(const Tempest::Device& device) noexcept {
+  const auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  if(nativeDevice==nullptr)
+    return {};
+
+  MetalBuiltinRuntimeSnapshot snapshot;
+  snapshot.available = true;
+  for(size_t i=0; i<snapshot.sourceLibraryRequests.size(); ++i) {
+    snapshot.sourceLibraryRequests[i] =
+        nativeDevice->builtinSourceLibraryRequests(
+            static_cast<MetalBuiltinSourceRole>(i));
+    }
+  for(size_t i=0; i<snapshot.renderPsoRequests.size(); ++i) {
+    snapshot.renderPsoRequests[i] =
+        nativeDevice->builtinRenderPsoRequests(
+            static_cast<MetalBuiltinRenderRole>(i));
+    }
+  return snapshot;
+  }
+
 bool MetalApi::withActiveRenderEncoder(
     const Tempest::Device& device,
     Tempest::Encoder<Tempest::CommandBuffer>& encoder,

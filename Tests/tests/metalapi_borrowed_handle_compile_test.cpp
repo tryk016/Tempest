@@ -8,6 +8,9 @@ namespace {
 using Tempest::BorrowedMetalBuffer;
 using Tempest::BorrowedMetalDevice;
 using Tempest::BorrowedMetalTexture;
+using Tempest::MetalBuiltinRenderRole;
+using Tempest::MetalBuiltinRuntimeSnapshot;
+using Tempest::MetalBuiltinSourceRole;
 using Tempest::MetalRuntimeCompilationSnapshot;
 
 template<class Handle, class Native>
@@ -41,6 +44,28 @@ static_assert(emptySnapshot.sourceLibraryRequests==0);
 static_assert(emptySnapshot.computePsoRequests==0);
 static_assert(emptySnapshot.renderPsoRequests==0);
 
+static_assert(std::is_trivially_copyable_v<MetalBuiltinRuntimeSnapshot>);
+static_assert(std::is_standard_layout_v<MetalBuiltinRuntimeSnapshot>);
+static_assert(std::is_default_constructible_v<MetalBuiltinRuntimeSnapshot>);
+constexpr MetalBuiltinRuntimeSnapshot emptyBuiltinSnapshot;
+static_assert(!emptyBuiltinSnapshot.available);
+static_assert(emptyBuiltinSnapshot.sourceLibraryRequests.size()==4);
+static_assert(emptyBuiltinSnapshot.renderPsoRequests.size()==12);
+static_assert(emptyBuiltinSnapshot.sourceLibraryRequests[
+                  Tempest::metalBuiltinSourceRoleIndex(
+                      MetalBuiltinSourceRole::ColorVertex)]==0);
+static_assert(emptyBuiltinSnapshot.renderPsoRequests[
+                  Tempest::metalBuiltinRenderRoleIndex(
+                      MetalBuiltinRenderRole::ColorLinesOpaque)]==0);
+static_assert(Tempest::metalBuiltinSourceRoleIndex(
+                  MetalBuiltinSourceRole::Count)==4);
+static_assert(Tempest::metalBuiltinRenderRoleIndex(
+                  MetalBuiltinRenderRole::Count)==12);
+static_assert(Tempest::metalBuiltinSourceRoleIndex(
+                  MetalBuiltinSourceRole::None)==0xFF);
+static_assert(Tempest::metalBuiltinRenderRoleIndex(
+                  MetalBuiltinRenderRole::None)==0xFF);
+
 static_assert(std::is_same_v<
               decltype(Tempest::MetalApi::borrowDevice(
                   std::declval<const Tempest::Device&>())),
@@ -69,6 +94,12 @@ static_assert(std::is_same_v<
                   std::declval<const Tempest::Device&>())),
               MetalRuntimeCompilationSnapshot>);
 static_assert(noexcept(Tempest::MetalApi::runtimeCompilationSnapshot(
+    std::declval<const Tempest::Device&>())));
+static_assert(std::is_same_v<
+              decltype(Tempest::MetalApi::builtinRuntimeSnapshot(
+                  std::declval<const Tempest::Device&>())),
+              MetalBuiltinRuntimeSnapshot>);
+static_assert(noexcept(Tempest::MetalApi::builtinRuntimeSnapshot(
     std::declval<const Tempest::Device&>())));
 
 static_assert(std::is_same_v<

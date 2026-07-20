@@ -6,6 +6,7 @@
 #include <Tempest/Except>
 
 #include "mtdevice.h"
+#include "mtbuiltinruntime.h"
 #include "gapi/shaderreflection.h"
 #include "thirdparty/spirv_cross/spirv_msl.hpp"
 
@@ -22,6 +23,7 @@ static uint32_t spvVersion(MTL::LanguageVersion v) {
 
 MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
   : Shader(source, srcSize) {
+  builtinSourceRole = classifyMetalBuiltinSource(source,srcSize);
   auto pool = NsPtr<NS::AutoreleasePool>::init();
   spirv_cross::CompilerMSL::Options optMSL;
 #if defined(__OSX__)
@@ -130,6 +132,7 @@ MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
   auto       str = NsPtr<NS::String>(NS::String::string(msl.c_str(),NS::UTF8StringEncoding));
   str->retain();
   dev.noteSourceLibraryRequest();
+  dev.noteBuiltinSourceLibraryRequest(builtinSourceRole);
   library = NsPtr<MTL::Library>(dev.impl->newLibrary(str.get(), opt.get(), &err));
 
   if(err!=nullptr) {

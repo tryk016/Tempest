@@ -13,6 +13,7 @@ add_test(${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PRIVATE .)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/../../Engine/include")
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/build/sprv")
 if(APPLE)
   target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/../../Engine/thirdparty/metal-cpp")
@@ -151,6 +152,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 
 set(BUILD_SHARED_LIBS ${BUILD_SHARED_MOLTEN_TEMPEST})
 add_subdirectory("${CMAKE_SOURCE_DIR}/../../Engine" build)
+add_dependencies(${PROJECT_NAME} shaders)
 
 if(UNIX)
   target_link_libraries(${PROJECT_NAME} -lpthread)

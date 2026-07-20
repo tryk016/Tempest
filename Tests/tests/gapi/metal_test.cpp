@@ -1,4 +1,5 @@
 #include <Tempest/MetalApi>
+#include <Tempest/Builtin>
 #include <Tempest/Except>
 #include <Tempest/Device>
 #include <Tempest/Fence>
@@ -8,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock-matchers.h>
 
+#include <array>
 #include <stdexcept>
 
 #include "gapi_test_common.h"
@@ -173,6 +175,73 @@ TEST(MetalApi,RuntimeCompilationCounters) {
   catch(std::system_error& e) {
     if(e.code()==Tempest::GraphicsErrc::NoDevice)
       Log::d("Skipping Metal runtime compilation counters testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,BuiltinRuntimeCounters) {
+#if defined(__OSX__)
+  try {
+    MetalApi api{ApiFlags::Validation};
+    Device device(api);
+
+    const auto initial = MetalApi::builtinRuntimeSnapshot(device);
+    ASSERT_TRUE(initial.available);
+    for(const uint64_t count:initial.sourceLibraryRequests)
+      EXPECT_EQ(count,1);
+    for(const uint64_t count:initial.renderPsoRequests)
+      EXPECT_EQ(count,0);
+
+    const auto& color   = device.builtin().empty();
+    const auto& texture = device.builtin().texture2d();
+    const std::array<const RenderPipeline*,12> pipelines = {{
+        &color.pen,&color.brush,
+        &color.penB,&color.brushB,
+        &color.penA,&color.brushA,
+        &texture.pen,&texture.brush,
+        &texture.penB,&texture.brushB,
+        &texture.penA,&texture.brushA,
+        }};
+
+    auto target  = device.attachment(TextureFormat::RGBA8,4,4);
+    auto command = device.commandBuffer();
+    {
+      auto encoder = command.startEncoding(device);
+      encoder.setFramebuffer(
+          {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      for(const RenderPipeline* pipeline:pipelines)
+        encoder.setPipeline(*pipeline);
+      }
+
+    const auto afterFirstInstances =
+        MetalApi::builtinRuntimeSnapshot(device);
+    for(const uint64_t count:afterFirstInstances.sourceLibraryRequests)
+      EXPECT_EQ(count,1);
+    for(const uint64_t count:afterFirstInstances.renderPsoRequests)
+      EXPECT_EQ(count,1);
+
+    auto secondTarget  = device.attachment(TextureFormat::RGBA16,4,4);
+    auto secondCommand = device.commandBuffer();
+    {
+      auto encoder = secondCommand.startEncoding(device);
+      encoder.setFramebuffer(
+          {{secondTarget,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      encoder.setPipeline(color.pen);
+      }
+
+    const auto afterSecondInstance =
+        MetalApi::builtinRuntimeSnapshot(device);
+    EXPECT_EQ(afterSecondInstance.renderPsoRequests[
+                  metalBuiltinRenderRoleIndex(
+                      MetalBuiltinRenderRole::ColorLinesOpaque)],
+              2);
+    for(size_t i=1; i<afterSecondInstance.renderPsoRequests.size(); ++i)
+      EXPECT_EQ(afterSecondInstance.renderPsoRequests[i],1);
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal builtin runtime counters testcase: ",e.what()); else
       throw;
     }
 #endif
