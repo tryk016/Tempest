@@ -1,6 +1,7 @@
 #if defined(TEMPEST_BUILD_METAL)
 
 #include "mtdevice.h"
+#include "mtpipelinearchive.h"
 #include "thirdparty/spirv_cross/spirv_msl.hpp"
 
 #include <Tempest/Log>
@@ -38,7 +39,8 @@ static MTL::LanguageVersion languageVersion() {
 MtDevice::MtDevice(
     std::string_view name,
     bool validation,
-    std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline)
+    std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline,
+    std::shared_ptr<const MetalPipelineArchiveConfigOwned> pipelineArchive)
   : impl(mkDevice(name)),
     samplers(*impl),
     validation(validation),
@@ -72,6 +74,9 @@ MtDevice::MtDevice(
       }
     }
 
+  pipelineArchiveImpl = std::make_unique<MtPipelineArchive>(
+      *impl,std::move(pipelineArchive));
+
   int32_t majorVersion = 0, minorVersion = 0;
   if([[NSProcessInfo processInfo] respondsToSelector:@selector(operatingSystemVersion)]) {
     NSOperatingSystemVersion ver = [[NSProcessInfo processInfo] operatingSystemVersion];
@@ -90,6 +95,26 @@ MtDevice::MtDevice(
 
 MtDevice::~MtDevice() {
   waitIdle();
+  }
+
+MTL::RenderPipelineState* MtDevice::newRenderPipelineState(
+    MTL::RenderPipelineDescriptor& descriptor,
+    MetalBuiltinRenderRole role,
+    NS::Error** error) {
+  return pipelineArchiveImpl->newRenderPipelineState(
+      *this,descriptor,role,error);
+  }
+
+MetalPipelineArchiveSnapshot
+MtDevice::pipelineArchiveSnapshot() const noexcept {
+  if(pipelineArchiveImpl==nullptr)
+    return {};
+  return pipelineArchiveImpl->snapshot();
+  }
+
+bool MtDevice::flushPipelineArchive() noexcept {
+  return pipelineArchiveImpl==nullptr ||
+         pipelineArchiveImpl->flush();
   }
 
 void MtDevice::waitIdle() {

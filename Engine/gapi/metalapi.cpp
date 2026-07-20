@@ -18,6 +18,7 @@
 #include "gapi/metal/mtbuffer.h"
 #include "gapi/metal/mtshader.h"
 #include "gapi/metal/mtpipeline.h"
+#include "gapi/metal/mtpipelinearchive.h"
 #include "gapi/metal/mtcommandbuffer.h"
 #include "gapi/metal/mttexture.h"
 #include "gapi/metal/mtpipelinelay.h"
@@ -45,6 +46,14 @@ MetalApi::MetalApi(
     const MetalBuiltinOfflineManifest& manifest)
   :MetalApi(f) {
   builtinOffline = makeMetalBuiltinOfflineConfig(manifest);
+  }
+
+MetalApi::MetalApi(
+    ApiFlags f,
+    const MetalBuiltinOfflineManifest& manifest,
+    const MetalPipelineArchiveConfig& archive)
+  :MetalApi(f,manifest) {
+  pipelineArchive = makeMetalPipelineArchiveConfig(archive);
   }
 
 MetalApi::~MetalApi() {
@@ -116,6 +125,22 @@ MetalApi::builtinRuntimeSnapshot(const Tempest::Device& device) noexcept {
   return snapshot;
   }
 
+MetalPipelineArchiveSnapshot
+MetalApi::pipelineArchiveSnapshot(
+    const Tempest::Device& device) noexcept {
+  const auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  if(nativeDevice==nullptr)
+    return {};
+  return nativeDevice->pipelineArchiveSnapshot();
+  }
+
+bool MetalApi::flushPipelineArchive(
+    Tempest::Device& device) noexcept {
+  auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  return nativeDevice!=nullptr &&
+         nativeDevice->flushPipelineArchive();
+  }
+
 bool MetalApi::withActiveRenderEncoder(
     const Tempest::Device& device,
     Tempest::Encoder<Tempest::CommandBuffer>& encoder,
@@ -175,7 +200,8 @@ std::vector<AbstractGraphicsApi::Props> MetalApi::devices() const {
   }
 
 AbstractGraphicsApi::Device* MetalApi::createDevice(std::string_view gpuName) {
-  return new MtDevice(gpuName,validation,builtinOffline);
+  return new MtDevice(
+      gpuName,validation,builtinOffline,pipelineArchive);
   }
 
 AbstractGraphicsApi::Swapchain *MetalApi::createSwapchain(SystemApi::Window *w,

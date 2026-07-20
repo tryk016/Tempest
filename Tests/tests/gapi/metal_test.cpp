@@ -10,9 +10,15 @@
 #include <gmock/gmock-matchers.h>
 
 #include <array>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
+
+#if defined(__OSX__)
+#include <unistd.h>
+#endif
 
 #include "gapi_test_common.h"
 
@@ -85,6 +91,39 @@ MetalBuiltinOfflineManifest testOfflineInventoryManifest(
       sources.fragment.size()*sizeof(uint32_t);
   manifest.inventoryFragmentFunction = "tempestOfflineInventoryFragment";
   return manifest;
+  }
+
+std::string pipelineArchiveTestPath(const char* suffix) {
+  return std::string("/tmp/tempest-metal-pipeline-archive-")+
+         std::to_string(
+             static_cast<unsigned long long>(::getpid()))+
+         suffix;
+  }
+
+void instantiateArchivedBuiltinPipelines(
+    Device& device,
+    bool opaque = true,
+    bool alpha = true) {
+  const auto& texture = device.builtin().texture2d();
+  auto target = device.attachment(TextureFormat::RGBA8,4,4);
+  auto command = device.commandBuffer();
+  auto encoder = command.startEncoding(device);
+  encoder.setFramebuffer(
+      {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+  if(opaque)
+    encoder.setPipeline(texture.brush);
+  if(alpha)
+    encoder.setPipeline(texture.brushB);
+  }
+
+void instantiateUnarchivedBuiltinPipeline(Device& device) {
+  const auto& texture = device.builtin().texture2d();
+  auto target = device.attachment(TextureFormat::RGBA8,4,4);
+  auto command = device.commandBuffer();
+  auto encoder = command.startEncoding(device);
+  encoder.setFramebuffer(
+      {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+  encoder.setPipeline(texture.brushA);
   }
 
 }
@@ -356,6 +395,203 @@ TEST(MetalApi,OfflineBuiltinMetallib) {
   catch(std::system_error& e) {
     if(e.code()==Tempest::GraphicsErrc::NoDevice)
       Log::d("Skipping offline Metal Builtin testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
+#if defined(__OSX__)
+  try {
+    const std::string archivePath =
+        pipelineArchiveTestPath(".bin");
+    const std::string partialArchivePath =
+        pipelineArchiveTestPath("-partial.bin");
+    const std::string badDirectory =
+        pipelineArchiveTestPath("-missing");
+    std::error_code cleanupError;
+    std::filesystem::remove(archivePath,cleanupError);
+    std::filesystem::remove(partialArchivePath,cleanupError);
+    std::filesystem::remove_all(badDirectory,cleanupError);
+
+    const auto manifest = testOfflineBuiltinManifest();
+    MetalPipelineArchiveConfig archiveConfig;
+    archiveConfig.archivePath = archivePath.c_str();
+
+    {
+      MetalApi api{
+          ApiFlags::Validation,manifest,archiveConfig};
+      Device device(api);
+      const auto initial =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_NE(initial.flags&
+                    MetalPipelineArchiveSnapshot::Configured,0u);
+      EXPECT_NE(initial.flags&
+                    MetalPipelineArchiveSnapshot::Available,0u);
+      EXPECT_NE(initial.flags&
+                    MetalPipelineArchiveSnapshot::CreatedEmpty,0u);
+      EXPECT_EQ(initial.flags&
+                    MetalPipelineArchiveSnapshot::LoadedFromDisk,0u);
+
+      instantiateUnarchivedBuiltinPipeline(device);
+      const auto afterUnarchived =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(afterUnarchived.renderHits,0u);
+      EXPECT_EQ(afterUnarchived.renderMisses,0u);
+      EXPECT_EQ(afterUnarchived.renderAdds,0u);
+      EXPECT_EQ(afterUnarchived.renderFallbacks,0u);
+      EXPECT_EQ(afterUnarchived.flags&
+                    MetalPipelineArchiveSnapshot::Dirty,0u);
+
+      instantiateArchivedBuiltinPipelines(device);
+      const auto runtime =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(runtime.sourceLibraryRequests,0u);
+      EXPECT_EQ(runtime.computePsoRequests,0u);
+      EXPECT_EQ(runtime.renderPsoRequests,3u);
+
+      const auto cold =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(cold.renderHits,0u);
+      EXPECT_EQ(cold.renderMisses,2u);
+      EXPECT_EQ(cold.renderAdds,2u);
+      EXPECT_EQ(cold.renderFallbacks,0u);
+      EXPECT_NE(cold.flags&
+                    MetalPipelineArchiveSnapshot::Dirty,0u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+
+      const auto flushed =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(flushed.flags&
+                    MetalPipelineArchiveSnapshot::Dirty,0u);
+      EXPECT_EQ(flushed.flushAttempts,1u);
+      EXPECT_EQ(flushed.flushSuccesses,1u);
+      EXPECT_EQ(flushed.flushFailures,0u);
+      EXPECT_TRUE(std::filesystem::is_regular_file(archivePath));
+      EXPECT_GT(std::filesystem::file_size(archivePath),0u);
+      }
+
+    {
+      MetalApi api{
+          ApiFlags::Validation,manifest,archiveConfig};
+      Device device(api);
+      const auto initial =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_NE(initial.flags&
+                    MetalPipelineArchiveSnapshot::LoadedFromDisk,0u);
+      EXPECT_EQ(initial.flags&
+                    MetalPipelineArchiveSnapshot::CreatedEmpty,0u);
+
+      instantiateArchivedBuiltinPipelines(device);
+      const auto runtime =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(runtime.renderPsoRequests,2u);
+
+      const auto warm =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(warm.renderHits,2u);
+      EXPECT_EQ(warm.renderMisses,0u);
+      EXPECT_EQ(warm.renderAdds,0u);
+      EXPECT_EQ(warm.renderFallbacks,0u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+      }
+
+    {
+      std::ofstream corrupt(
+          archivePath,std::ios::binary|std::ios::trunc);
+      corrupt << "not a Metal binary archive";
+      corrupt.close();
+
+      MetalApi api{
+          ApiFlags::Validation,manifest,archiveConfig};
+      Device device(api);
+      const auto recovered =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(recovered.loadFailures,1u);
+      EXPECT_EQ(recovered.rebuilds,1u);
+      EXPECT_NE(recovered.flags&
+                    MetalPipelineArchiveSnapshot::CreatedEmpty,0u);
+      EXPECT_EQ(recovered.flags&
+                    MetalPipelineArchiveSnapshot::DisabledAfterError,0u);
+
+      instantiateArchivedBuiltinPipelines(device);
+      const auto afterPipelines =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(afterPipelines.renderMisses,2u);
+      EXPECT_EQ(afterPipelines.renderAdds,2u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+      }
+
+    {
+      MetalPipelineArchiveConfig partialConfig;
+      partialConfig.archivePath = partialArchivePath.c_str();
+      MetalApi api{
+          ApiFlags::Validation,manifest,partialConfig};
+      Device device(api);
+      instantiateArchivedBuiltinPipelines(device,true,false);
+      const auto coldPartial =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(coldPartial.renderHits,0u);
+      EXPECT_EQ(coldPartial.renderMisses,1u);
+      EXPECT_EQ(coldPartial.renderAdds,1u);
+      EXPECT_EQ(
+          MetalApi::runtimeCompilationSnapshot(device).
+              renderPsoRequests,
+          1u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+      }
+
+    {
+      MetalPipelineArchiveConfig partialConfig;
+      partialConfig.archivePath = partialArchivePath.c_str();
+      MetalApi api{
+          ApiFlags::Validation,manifest,partialConfig};
+      Device device(api);
+      instantiateArchivedBuiltinPipelines(device);
+      const auto partial =
+          MetalApi::pipelineArchiveSnapshot(device);
+      // MTLBinaryArchive stores pipeline functions rather than the whole
+      // blend descriptor. Both selected logical roles share the exact same
+      // vertex/fragment function pair, so an archive populated through only
+      // the opaque role is already a strict hit for the alpha role.
+      EXPECT_EQ(partial.renderHits,2u);
+      EXPECT_EQ(partial.renderMisses,0u);
+      EXPECT_EQ(partial.renderAdds,0u);
+      EXPECT_EQ(partial.renderFallbacks,0u);
+      EXPECT_EQ(
+          MetalApi::runtimeCompilationSnapshot(device).
+              renderPsoRequests,
+          2u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+      }
+
+    {
+      const std::string unwritablePath =
+          badDirectory+"/archive.bin";
+      MetalPipelineArchiveConfig unwritableConfig;
+      unwritableConfig.archivePath = unwritablePath.c_str();
+      MetalApi api{
+          ApiFlags::Validation,manifest,unwritableConfig};
+      Device device(api);
+      instantiateArchivedBuiltinPipelines(device);
+      EXPECT_FALSE(MetalApi::flushPipelineArchive(device));
+
+      const auto failed =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(failed.flushAttempts,1u);
+      EXPECT_EQ(failed.flushSuccesses,0u);
+      EXPECT_EQ(failed.flushFailures,1u);
+      EXPECT_NE(failed.flags&
+                    MetalPipelineArchiveSnapshot::DisabledAfterError,0u);
+      }
+
+    std::filesystem::remove(archivePath,cleanupError);
+    std::filesystem::remove(partialArchivePath,cleanupError);
+    std::filesystem::remove_all(badDirectory,cleanupError);
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal binary archive testcase: ",e.what()); else
       throw;
     }
 #endif

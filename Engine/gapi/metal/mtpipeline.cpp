@@ -129,9 +129,10 @@ MTL::RenderPipelineState& MtPipeline::inst(const MtFboLayout& lay, size_t stride
     pdesc->setDepthAttachmentPixelFormat(lay.depthFormat);
 
     NS::Error* error = nullptr;
-    device.noteRenderPsoRequest();
     device.noteBuiltinRenderPsoRequest(builtinRenderRole);
-    ix.pso = NsPtr<MTL::RenderPipelineState>(device.impl->newRenderPipelineState(pdesc.get(),&error));
+    ix.pso = NsPtr<MTL::RenderPipelineState>(
+        device.newRenderPipelineState(
+            *pdesc,builtinRenderRole,&error));
     mtAssert(ix.pso.get(),error);
     }
 

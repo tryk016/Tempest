@@ -28,6 +28,9 @@ class MTLDevice;
 namespace Tempest {
 namespace Detail {
 
+class MtPipelineArchive;
+struct MetalPipelineArchiveConfigOwned;
+
 inline MTL::PixelFormat nativeFormat(TextureFormat frm) {
   switch(frm) {
     case Undefined:
@@ -257,7 +260,9 @@ class MtDevice : public AbstractGraphicsApi::Device {
     MtDevice(
         std::string_view name,
         bool validation,
-        std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline = {});
+        std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline = {},
+        std::shared_ptr<const MetalPipelineArchiveConfigOwned>
+            pipelineArchive = {});
     ~MtDevice();
 
     static const uint32_t MaxFences = 32;
@@ -359,6 +364,13 @@ class MtDevice : public AbstractGraphicsApi::Device {
           std::memory_order_relaxed);
       }
 
+    MTL::RenderPipelineState* newRenderPipelineState(
+        MTL::RenderPipelineDescriptor& descriptor,
+        MetalBuiltinRenderRole role,
+        NS::Error** error);
+    MetalPipelineArchiveSnapshot pipelineArchiveSnapshot() const noexcept;
+    bool flushPipelineArchive() noexcept;
+
     std::shared_ptr<MtFence> findAvailableFence();
     void                     waitAny(std::unique_lock<std::mutex>& guard);
     std::shared_ptr<MtFence> aquireFence();
@@ -383,6 +395,7 @@ class MtDevice : public AbstractGraphicsApi::Device {
   private:
     std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline;
     NsPtr<MTL::Library> builtinOfflineLibraryImpl;
+    std::unique_ptr<MtPipelineArchive> pipelineArchiveImpl;
     std::atomic<uint64_t> sourceLibraryRequestCount = 0;
     std::atomic<uint64_t> computePsoRequestCount    = 0;
     std::atomic<uint64_t> renderPsoRequestCount     = 0;

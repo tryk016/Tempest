@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 
 namespace MTL {
 class Device;
@@ -18,6 +19,7 @@ namespace Tempest {
 
 namespace Detail {
 struct MetalBuiltinOfflineConfig;
+struct MetalPipelineArchiveConfigOwned;
 }
 
 class CommandBuffer;
@@ -121,6 +123,64 @@ struct MetalBuiltinRuntimeSnapshot final {
       renderPsoRequests = {};
   };
 
+// Versioned C-compatible configuration for the device-wide Metal binary
+// archive. MetalApi copies the UTF-8 path. The path must be absolute.
+struct MetalPipelineArchiveConfig final {
+  static constexpr uint32_t AbiVersion = 1;
+  static constexpr uint32_t StructSize =
+      2*sizeof(uint32_t) + sizeof(const char*);
+
+  uint32_t    abiVersion = AbiVersion;
+  uint32_t    structSize = StructSize;
+  const char* archivePath = nullptr;
+  };
+
+// Trivially-copyable diagnostic view of the binary archive. Counter values
+// are monotonic for the lifetime of the originating Tempest device.
+struct MetalPipelineArchiveSnapshot final {
+  static constexpr uint32_t AbiVersion = 1;
+  static constexpr uint32_t StructSize =
+      4*sizeof(uint32_t) + 13*sizeof(uint64_t);
+
+  static constexpr uint32_t Configured         = 1u << 0;
+  static constexpr uint32_t Available          = 1u << 1;
+  static constexpr uint32_t LoadedFromDisk     = 1u << 2;
+  static constexpr uint32_t CreatedEmpty       = 1u << 3;
+  static constexpr uint32_t Dirty              = 1u << 4;
+  static constexpr uint32_t DisabledAfterError = 1u << 5;
+
+  uint32_t abiVersion = AbiVersion;
+  uint32_t structSize = StructSize;
+  uint32_t flags      = 0;
+  uint32_t reserved   = 0;
+
+  uint64_t loadFailures = 0;
+  uint64_t rebuilds     = 0;
+
+  uint64_t renderHits      = 0;
+  uint64_t renderMisses    = 0;
+  uint64_t renderAdds      = 0;
+  uint64_t renderFallbacks = 0;
+
+  uint64_t computeHits      = 0;
+  uint64_t computeMisses    = 0;
+  uint64_t computeAdds      = 0;
+  uint64_t computeFallbacks = 0;
+
+  uint64_t flushAttempts  = 0;
+  uint64_t flushSuccesses = 0;
+  uint64_t flushFailures  = 0;
+  };
+
+static_assert(std::is_standard_layout_v<MetalPipelineArchiveConfig>);
+static_assert(std::is_trivially_copyable_v<MetalPipelineArchiveConfig>);
+static_assert(sizeof(MetalPipelineArchiveConfig)==
+              MetalPipelineArchiveConfig::StructSize);
+static_assert(std::is_standard_layout_v<MetalPipelineArchiveSnapshot>);
+static_assert(std::is_trivially_copyable_v<MetalPipelineArchiveSnapshot>);
+static_assert(sizeof(MetalPipelineArchiveSnapshot)==
+              MetalPipelineArchiveSnapshot::StructSize);
+
 // Versioned C-compatible view of the four Tempest Builtin shader entry points
 // and the optional OpenGothic inventory pair in an offline Metal library.
 // MetalApi copies all strings and optional SPIR-V blobs. The path is UTF-8 and
@@ -150,6 +210,9 @@ class MetalApi : public AbstractGraphicsApi {
   public:
     explicit MetalApi(ApiFlags f=ApiFlags::NoFlags);
     MetalApi(ApiFlags f, const MetalBuiltinOfflineManifest& manifest);
+    MetalApi(ApiFlags f,
+             const MetalBuiltinOfflineManifest& manifest,
+             const MetalPipelineArchiveConfig& archive);
     ~MetalApi();
 
     std::vector<Props> devices() const override;
@@ -168,6 +231,11 @@ class MetalApi : public AbstractGraphicsApi {
     [[nodiscard]]
     static MetalBuiltinRuntimeSnapshot
         builtinRuntimeSnapshot(const Tempest::Device& device) noexcept;
+    [[nodiscard]]
+    static MetalPipelineArchiveSnapshot
+        pipelineArchiveSnapshot(const Tempest::Device& device) noexcept;
+    [[nodiscard]]
+    static bool flushPipelineArchive(Tempest::Device& device) noexcept;
     [[nodiscard]]
     static bool withActiveRenderEncoder(
         const Tempest::Device& device,
@@ -217,6 +285,8 @@ class MetalApi : public AbstractGraphicsApi {
   private:
     std::shared_ptr<const Detail::MetalBuiltinOfflineConfig>
                    builtinOffline;
+    std::shared_ptr<const Detail::MetalPipelineArchiveConfigOwned>
+                   pipelineArchive;
     bool           validation = false;
   };
 

@@ -1,4 +1,5 @@
 #include "../../../Engine/gapi/metal/mtbuiltinruntime.h"
+#include "../../../Engine/gapi/metal/mtpipelinearchive.h"
 
 #include "builtin_shader.h"
 
@@ -21,6 +22,7 @@ using Tempest::Detail::classifyMetalInventoryOfflineSource;
 using Tempest::Detail::configureMetalBuiltinOfflineReflection;
 using Tempest::Detail::configureMetalInventoryOfflineReflection;
 using Tempest::Detail::makeMetalBuiltinOfflineConfig;
+using Tempest::Detail::makeMetalPipelineArchiveConfig;
 
 template<size_t N>
 void expectExactSourceRole(const uint8_t (&source)[N],
@@ -151,6 +153,78 @@ TEST(MetalBuiltinRuntime,OwnsAndMapsValidOfflineManifest) {
                         sizeof(inventoryFragmentSource)),0);
   EXPECT_EQ(config->inventoryFunctionNames[0],"inventoryVertex");
   EXPECT_EQ(config->inventoryFunctionNames[1],"inventoryFragment");
+  }
+
+TEST(MetalPipelineArchive,PublicAbiAndOwnership) {
+  static_assert(MetalPipelineArchiveConfig::AbiVersion==1);
+  static_assert(MetalPipelineArchiveSnapshot::AbiVersion==1);
+  static_assert(std::is_standard_layout_v<MetalPipelineArchiveConfig>);
+  static_assert(std::is_trivially_copyable_v<MetalPipelineArchiveConfig>);
+  static_assert(std::is_standard_layout_v<MetalPipelineArchiveSnapshot>);
+  static_assert(std::is_trivially_copyable_v<MetalPipelineArchiveSnapshot>);
+
+  std::string path = "/tmp/tempest-pipeline-archive.bin";
+  MetalPipelineArchiveConfig config;
+  config.archivePath = path.c_str();
+  const auto owned = makeMetalPipelineArchiveConfig(config);
+  path[1] = 'X';
+
+  EXPECT_EQ(owned->archivePath,
+            "/tmp/tempest-pipeline-archive.bin");
+  MetalPipelineArchiveSnapshot snapshot;
+  EXPECT_EQ(snapshot.abiVersion,
+            MetalPipelineArchiveSnapshot::AbiVersion);
+  EXPECT_EQ(snapshot.structSize,
+            MetalPipelineArchiveSnapshot::StructSize);
+  EXPECT_EQ(snapshot.flags,0u);
+  EXPECT_EQ(snapshot.renderHits,0u);
+  EXPECT_EQ(snapshot.computeFallbacks,0u);
+  EXPECT_EQ(snapshot.flushFailures,0u);
+  }
+
+TEST(MetalPipelineArchive,RejectsInvalidConfig) {
+  MetalPipelineArchiveConfig config;
+  config.archivePath = "/tmp/tempest-pipeline-archive.bin";
+
+  config.abiVersion++;
+  EXPECT_THROW((void)makeMetalPipelineArchiveConfig(config),
+               std::invalid_argument);
+  config.abiVersion = MetalPipelineArchiveConfig::AbiVersion;
+
+  config.structSize--;
+  EXPECT_THROW((void)makeMetalPipelineArchiveConfig(config),
+               std::invalid_argument);
+  config.structSize = MetalPipelineArchiveConfig::StructSize;
+
+  config.archivePath = nullptr;
+  EXPECT_THROW((void)makeMetalPipelineArchiveConfig(config),
+               std::invalid_argument);
+  config.archivePath = "";
+  EXPECT_THROW((void)makeMetalPipelineArchiveConfig(config),
+               std::invalid_argument);
+  config.archivePath = "relative.bin";
+  EXPECT_THROW((void)makeMetalPipelineArchiveConfig(config),
+               std::invalid_argument);
+
+  const char invalidUtf8[] = {'/',char(0xc0),char(0x80),0};
+  config.archivePath = invalidUtf8;
+  EXPECT_THROW((void)makeMetalPipelineArchiveConfig(config),
+               std::invalid_argument);
+  }
+
+TEST(MetalPipelineArchive,HardCodesOnlyFirstSliceRenderRoles) {
+  for(size_t i=0;
+      i<metalBuiltinRenderRoleIndex(MetalBuiltinRenderRole::Count);
+      ++i) {
+    const auto role = static_cast<MetalBuiltinRenderRole>(i);
+    const bool expected =
+        role==MetalBuiltinRenderRole::TextureTrianglesOpaque ||
+        role==MetalBuiltinRenderRole::TextureTrianglesAlpha;
+    EXPECT_EQ(Tempest::Detail::isMetalPipelineArchiveRenderRole(role),
+              expected);
+    }
+  EXPECT_FALSE(Tempest::Detail::isMetalPipelineArchiveRenderRole(
+      MetalBuiltinRenderRole::None));
   }
 
 TEST(MetalBuiltinRuntime,RejectsInvalidOfflineManifest) {
