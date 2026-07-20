@@ -24,16 +24,26 @@ static uint32_t spvVersion(MTL::LanguageVersion v) {
 MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
   : Shader(source, srcSize) {
   builtinSourceRole = classifyMetalBuiltinSource(source,srcSize);
+  inventorySourceRole =
+      dev.inventoryOfflineSourceRole(source,srcSize);
   auto pool = NsPtr<NS::AutoreleasePool>::init();
 
-  if(const std::string* functionName =
-         dev.builtinOfflineFunctionName(builtinSourceRole);
-     functionName!=nullptr) {
-    if(!configureMetalBuiltinOfflineReflection(
-           builtinSourceRole,stage,vert.decl,lay))
+  const std::string* functionName =
+      dev.builtinOfflineFunctionName(builtinSourceRole);
+  if(functionName==nullptr)
+    functionName =
+        dev.inventoryOfflineFunctionName(inventorySourceRole);
+  if(functionName!=nullptr) {
+    const bool reflectionMatches =
+        builtinSourceRole!=MetalBuiltinSourceRole::None
+            ? configureMetalBuiltinOfflineReflection(
+                  builtinSourceRole,stage,vert.decl,lay)
+            : configureMetalInventoryOfflineReflection(
+                  inventorySourceRole,stage,vert.decl,lay);
+    if(!reflectionMatches)
       throw std::system_error(
           Tempest::GraphicsErrc::InvalidShaderModule,
-          "Builtin SPIR-V interface does not match offline Metal ABI");
+          "SPIR-V interface does not match offline Metal ABI");
 
     MTL::Library* offlineLibrary = dev.builtinOfflineLibrary();
     if(offlineLibrary==nullptr)
@@ -51,9 +61,7 @@ MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
     impl = NsPtr<MTL::Function>(
         library->newFunction(name.get(),cvar.get(),&error));
 
-    const bool vertex =
-        builtinSourceRole==MetalBuiltinSourceRole::ColorVertex ||
-        builtinSourceRole==MetalBuiltinSourceRole::TextureVertex;
+    const bool vertex = stage==ShaderReflection::Stage::Vertex;
     const MTL::FunctionType expectedType =
         vertex ? MTL::FunctionTypeVertex : MTL::FunctionTypeFragment;
     if(impl==nullptr || error!=nullptr ||

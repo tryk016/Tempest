@@ -19,6 +19,18 @@ struct TempestOfflineTextureVertexOut {
   float2 uv       [[user(locn1)]];
 };
 
+struct TempestOfflineInventoryVertexIn {
+  float3 position [[attribute(0)]];
+  float3 normal   [[attribute(1)]];
+  float2 uv       [[attribute(2)]];
+  uint   color    [[attribute(3)]];
+};
+
+struct TempestOfflineInventoryVertexOut {
+  float4 position [[position]];
+  float2 uv       [[user(locn0)]];
+};
+
 vertex TempestOfflineColorVertexOut tempestOfflineColorVertex(
     TempestOfflineVertexIn in [[stage_in]]) {
   TempestOfflineColorVertexOut out;
@@ -55,5 +67,36 @@ vertex TempestOfflineColorVertexOut tempestOfflineWrongFragmentStage(
   TempestOfflineColorVertexOut out;
   out.position = float4(in.position,1.0f);
   out.color = in.color;
+  return out;
+}
+
+vertex TempestOfflineInventoryVertexOut tempestOfflineInventoryVertex(
+    TempestOfflineInventoryVertexIn in [[stage_in]],
+    constant float4x4& viewProject [[buffer(0)]]) {
+  TempestOfflineInventoryVertexOut out;
+  out.position = viewProject*float4(in.position,1.0f);
+  out.position.y = -out.position.y;
+  out.uv = in.uv;
+  return out;
+}
+
+fragment float4 tempestOfflineInventoryFragment(
+    TempestOfflineInventoryVertexOut in [[stage_in]],
+    texture2d<float,access::sample> texture [[texture(0)]],
+    sampler textureSampler [[sampler(0)]]) {
+  const float4 color = texture.sample(textureSampler,in.uv);
+  if(color.a<0.5f)
+    discard_fragment();
+  return color;
+}
+
+vertex TempestOfflineInventoryVertexOut
+tempestOfflineWrongInventoryFragmentStage(
+    TempestOfflineInventoryVertexIn in [[stage_in]],
+    constant float4x4& viewProject [[buffer(0)]]) {
+  TempestOfflineInventoryVertexOut out;
+  out.position = viewProject*float4(in.position,1.0f);
+  out.position.y = -out.position.y;
+  out.uv = in.uv;
   return out;
 }

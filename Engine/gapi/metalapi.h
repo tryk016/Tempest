@@ -122,12 +122,14 @@ struct MetalBuiltinRuntimeSnapshot final {
   };
 
 // Versioned C-compatible view of the four Tempest Builtin shader entry points
-// in an offline Metal library. All strings are copied by MetalApi. The path is
-// UTF-8 and must be absolute.
+// and the optional OpenGothic inventory pair in an offline Metal library.
+// MetalApi copies all strings and optional SPIR-V blobs. The path is UTF-8 and
+// must be absolute. The inventory pair is fail-closed: either all six fields
+// are null/zero, or all six must describe two distinct exact shader modules.
 struct MetalBuiltinOfflineManifest final {
-  static constexpr uint32_t AbiVersion = 1;
+  static constexpr uint32_t AbiVersion = 2;
   static constexpr uint32_t StructSize =
-      2*sizeof(uint32_t) + 5*sizeof(const char*);
+      2*sizeof(uint32_t) + 9*sizeof(const void*) + 2*sizeof(size_t);
 
   uint32_t    abiVersion = AbiVersion;
   uint32_t    structSize = StructSize;
@@ -136,6 +138,12 @@ struct MetalBuiltinOfflineManifest final {
   const char* colorFragmentFunction = nullptr;
   const char* textureVertexFunction = nullptr;
   const char* textureFragmentFunction = nullptr;
+  const void* inventoryVertexSpirv = nullptr;
+  size_t      inventoryVertexSpirvSize = 0;
+  const char* inventoryVertexFunction = nullptr;
+  const void* inventoryFragmentSpirv = nullptr;
+  size_t      inventoryFragmentSpirvSize = 0;
+  const char* inventoryFragmentFunction = nullptr;
   };
 
 class MetalApi : public AbstractGraphicsApi {

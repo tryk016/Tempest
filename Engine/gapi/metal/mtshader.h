@@ -4,6 +4,7 @@
 #include <Tempest/MetalApi>
 
 #include "gapi/shader.h"
+#include "gapi/metal/mtbuiltinruntime.h"
 
 #include <Metal/Metal.hpp>
 #include "nsptr.h"
@@ -27,6 +28,8 @@ class MtShader : public Detail::Shader {
     NsPtr<MTL::Function> impl;
     MetalBuiltinSourceRole builtinSourceRole =
         MetalBuiltinSourceRole::None;
+    MetalInventoryOfflineRole inventorySourceRole =
+        MetalInventoryOfflineRole::None;
     bool                 bufferSizeBuffer = false;
   };
 

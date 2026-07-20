@@ -83,6 +83,12 @@ static_assert(emptyOfflineManifest.colorVertexFunction==nullptr);
 static_assert(emptyOfflineManifest.colorFragmentFunction==nullptr);
 static_assert(emptyOfflineManifest.textureVertexFunction==nullptr);
 static_assert(emptyOfflineManifest.textureFragmentFunction==nullptr);
+static_assert(emptyOfflineManifest.inventoryVertexSpirv==nullptr);
+static_assert(emptyOfflineManifest.inventoryVertexSpirvSize==0);
+static_assert(emptyOfflineManifest.inventoryVertexFunction==nullptr);
+static_assert(emptyOfflineManifest.inventoryFragmentSpirv==nullptr);
+static_assert(emptyOfflineManifest.inventoryFragmentSpirvSize==0);
+static_assert(emptyOfflineManifest.inventoryFragmentFunction==nullptr);
 static_assert(std::is_constructible_v<
               Tempest::MetalApi,
               Tempest::ApiFlags,

@@ -29,6 +29,10 @@ bool validManifestString(const char* value) noexcept {
   return value!=nullptr && value[0]!='\0';
   }
 
+bool validManifestSource(const void* source, size_t sourceSize) noexcept {
+  return source!=nullptr && sourceSize!=0 && sourceSize%sizeof(uint32_t)==0;
+  }
+
 BlendRole classifyBlend(const RenderState& state) noexcept {
   if(state.blendOperation()!=RenderState::BlendOp::Add)
     return BlendRole::None;
@@ -60,6 +64,18 @@ Tempest::Detail::makeMetalBuiltinOfflineConfig(
       manifest.textureVertexFunction,
       manifest.textureFragmentFunction,
       }};
+  const std::array<const void*,2> inventorySources = {{
+      manifest.inventoryVertexSpirv,
+      manifest.inventoryFragmentSpirv,
+      }};
+  const std::array<size_t,2> inventorySourceSizes = {{
+      manifest.inventoryVertexSpirvSize,
+      manifest.inventoryFragmentSpirvSize,
+      }};
+  const std::array<const char*,2> inventoryNames = {{
+      manifest.inventoryVertexFunction,
+      manifest.inventoryFragmentFunction,
+      }};
   if(!validManifestString(manifest.metallibPath) ||
      manifest.metallibPath[0]!='/')
     throw std::invalid_argument(
@@ -74,10 +90,50 @@ Tempest::Detail::makeMetalBuiltinOfflineConfig(
         throw std::invalid_argument(
             "Metal Builtin offline function names must be distinct");
 
+  const bool hasInventory =
+      inventorySources[0]!=nullptr || inventorySourceSizes[0]!=0 ||
+      inventoryNames[0]!=nullptr || inventorySources[1]!=nullptr ||
+      inventorySourceSizes[1]!=0 || inventoryNames[1]!=nullptr;
+  if(hasInventory) {
+    for(size_t i=0; i<inventorySources.size(); ++i) {
+      if(!validManifestSource(
+             inventorySources[i],inventorySourceSizes[i]) ||
+         !validManifestString(inventoryNames[i]))
+        throw std::invalid_argument(
+            "Metal inventory offline manifest pair is incomplete");
+      if(classifyMetalBuiltinSource(
+             inventorySources[i],inventorySourceSizes[i])!=
+         MetalBuiltinSourceRole::None)
+        throw std::invalid_argument(
+            "Metal inventory offline source aliases a Tempest Builtin shader");
+      for(const char* builtinName:names)
+        if(std::strcmp(inventoryNames[i],builtinName)==0)
+          throw std::invalid_argument(
+              "Metal offline function names must be distinct");
+      }
+    if(inventorySourceSizes[0]==inventorySourceSizes[1] &&
+       std::memcmp(inventorySources[0],inventorySources[1],
+                   inventorySourceSizes[0])==0)
+      throw std::invalid_argument(
+          "Metal inventory offline shader modules must be distinct");
+    if(std::strcmp(inventoryNames[0],inventoryNames[1])==0)
+      throw std::invalid_argument(
+          "Metal offline function names must be distinct");
+    }
+
   auto config = std::make_shared<MetalBuiltinOfflineConfig>();
   config->metallibPath = manifest.metallibPath;
   for(size_t i=0; i<names.size(); ++i)
     config->functionNames[i] = names[i];
+  if(hasInventory) {
+    for(size_t i=0; i<inventorySources.size(); ++i) {
+      const auto* begin =
+          static_cast<const uint8_t*>(inventorySources[i]);
+      config->inventorySources[i].assign(
+          begin,begin+inventorySourceSizes[i]);
+      config->inventoryFunctionNames[i] = inventoryNames[i];
+      }
+    }
   return config;
   }
 
@@ -92,6 +148,21 @@ MetalBuiltinSourceRole Tempest::Detail::classifyMetalBuiltinSource(
   if(sourceEquals(source,sourceSize,tex_brush_frag_sprv))
     return MetalBuiltinSourceRole::TextureFragment;
   return MetalBuiltinSourceRole::None;
+  }
+
+MetalInventoryOfflineRole
+Tempest::Detail::classifyMetalInventoryOfflineSource(
+    const MetalBuiltinOfflineConfig& config,
+    const void* source, size_t sourceSize) noexcept {
+  if(source==nullptr)
+    return MetalInventoryOfflineRole::None;
+  for(size_t i=0; i<config.inventorySources.size(); ++i) {
+    const auto& expected = config.inventorySources[i];
+    if(!expected.empty() && expected.size()==sourceSize &&
+       std::memcmp(source,expected.data(),sourceSize)==0)
+      return static_cast<MetalInventoryOfflineRole>(i);
+    }
+  return MetalInventoryOfflineRole::None;
   }
 
 bool Tempest::Detail::configureMetalBuiltinOfflineReflection(
@@ -146,6 +217,66 @@ bool Tempest::Detail::configureMetalBuiltinOfflineReflection(
   binding.mslBinding  = 0;
   binding.mslBinding2 = 0;
   binding.mslSize     = 0;
+  return true;
+  }
+
+bool Tempest::Detail::configureMetalInventoryOfflineReflection(
+    MetalInventoryOfflineRole role,
+    ShaderReflection::Stage stage,
+    const std::vector<Decl::ComponentType>& vertexDecl,
+    std::vector<ShaderReflection::Binding>& layout) noexcept {
+  using Component = Decl::ComponentType;
+  using Reflection = ShaderReflection;
+
+  if(role==MetalInventoryOfflineRole::Vertex) {
+    const std::array<Component,4> expectedDecl = {{
+        Component::float3,
+        Component::float3,
+        Component::float2,
+        Component::uint1,
+        }};
+    if(stage!=Reflection::Stage::Vertex ||
+       vertexDecl.size()!=expectedDecl.size() ||
+       !std::equal(vertexDecl.begin(),vertexDecl.end(),
+                   expectedDecl.begin()) ||
+       layout.size()!=1)
+      return false;
+
+    auto& push = layout[0];
+    if(push.layout!=0 ||
+       push.cls!=Reflection::Class::Push ||
+       push.stage!=Reflection::Stage::Vertex ||
+       push.runtimeSized ||
+       push.is3DImage ||
+       push.arraySize!=0 ||
+       push.byteSize!=64 ||
+       push.varByteSize!=0)
+      return false;
+    push.mslBinding  = 0;
+    push.mslBinding2 = uint32_t(-1);
+    push.mslSize     = 64;
+    return true;
+    }
+
+  if(role!=MetalInventoryOfflineRole::Fragment ||
+     stage!=Reflection::Stage::Fragment ||
+     !vertexDecl.empty() ||
+     layout.size()!=1)
+    return false;
+
+  auto& texture = layout[0];
+  if(texture.layout!=0 ||
+     texture.cls!=Reflection::Class::Texture ||
+     texture.stage!=Reflection::Stage::Fragment ||
+     texture.runtimeSized ||
+     texture.is3DImage ||
+     texture.arraySize!=1 ||
+     texture.byteSize!=0 ||
+     texture.varByteSize!=0)
+    return false;
+  texture.mslBinding  = 0;
+  texture.mslBinding2 = 0;
+  texture.mslSize     = 0;
   return true;
   }
 

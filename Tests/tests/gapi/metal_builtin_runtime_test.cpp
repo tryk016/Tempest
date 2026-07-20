@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstring>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -16,7 +17,9 @@ namespace {
 
 using Tempest::Detail::classifyMetalBuiltinRenderRole;
 using Tempest::Detail::classifyMetalBuiltinSource;
+using Tempest::Detail::classifyMetalInventoryOfflineSource;
 using Tempest::Detail::configureMetalBuiltinOfflineReflection;
+using Tempest::Detail::configureMetalInventoryOfflineReflection;
 using Tempest::Detail::makeMetalBuiltinOfflineConfig;
 
 template<size_t N>
@@ -56,6 +59,22 @@ MetalBuiltinOfflineManifest validOfflineManifest() {
   return manifest;
   }
 
+constexpr std::array<uint32_t,5> inventoryVertexSource = {
+    0x07230203,0x00010000,0,1,1,
+    };
+constexpr std::array<uint32_t,5> inventoryFragmentSource = {
+    0x07230203,0x00010000,0,1,2,
+    };
+
+void addInventoryPair(MetalBuiltinOfflineManifest& manifest) {
+  manifest.inventoryVertexSpirv = inventoryVertexSource.data();
+  manifest.inventoryVertexSpirvSize = sizeof(inventoryVertexSource);
+  manifest.inventoryVertexFunction = "inventoryVertex";
+  manifest.inventoryFragmentSpirv = inventoryFragmentSource.data();
+  manifest.inventoryFragmentSpirvSize = sizeof(inventoryFragmentSource);
+  manifest.inventoryFragmentFunction = "inventoryFragment";
+  }
+
 std::vector<Decl::ComponentType> builtinVertexDecl() {
   return {
       Decl::ComponentType::float3,
@@ -89,10 +108,26 @@ TEST(MetalBuiltinRuntime,OwnsAndMapsValidOfflineManifest) {
   manifest.colorFragmentFunction   = names[1].c_str();
   manifest.textureVertexFunction   = names[2].c_str();
   manifest.textureFragmentFunction = names[3].c_str();
+  std::array<uint32_t,5> inventoryVertex = inventoryVertexSource;
+  std::array<uint32_t,5> inventoryFragment = inventoryFragmentSource;
+  std::array<std::string,2> inventoryNames = {{
+      "inventoryVertex",
+      "inventoryFragment",
+      }};
+  manifest.inventoryVertexSpirv = inventoryVertex.data();
+  manifest.inventoryVertexSpirvSize = sizeof(inventoryVertex);
+  manifest.inventoryVertexFunction = inventoryNames[0].c_str();
+  manifest.inventoryFragmentSpirv = inventoryFragment.data();
+  manifest.inventoryFragmentSpirvSize = sizeof(inventoryFragment);
+  manifest.inventoryFragmentFunction = inventoryNames[1].c_str();
 
   const auto config = makeMetalBuiltinOfflineConfig(manifest);
   path[1] = 'X';
   for(auto& name:names)
+    name[0] = 'X';
+  inventoryVertex[4] = 0;
+  inventoryFragment[4] = 0;
+  for(auto& name:inventoryNames)
     name[0] = 'X';
 
   EXPECT_EQ(config->metallibPath,"/tmp/tempest-builtins.metallib");
@@ -104,6 +139,18 @@ TEST(MetalBuiltinRuntime,OwnsAndMapsValidOfflineManifest) {
                 MetalBuiltinSourceRole::TextureVertex)],"textureVertex");
   EXPECT_EQ(config->functionNames[metalBuiltinSourceRoleIndex(
                 MetalBuiltinSourceRole::TextureFragment)],"textureFragment");
+  ASSERT_EQ(config->inventorySources[0].size(),
+            sizeof(inventoryVertexSource));
+  ASSERT_EQ(config->inventorySources[1].size(),
+            sizeof(inventoryFragmentSource));
+  EXPECT_EQ(std::memcmp(config->inventorySources[0].data(),
+                        inventoryVertexSource.data(),
+                        sizeof(inventoryVertexSource)),0);
+  EXPECT_EQ(std::memcmp(config->inventorySources[1].data(),
+                        inventoryFragmentSource.data(),
+                        sizeof(inventoryFragmentSource)),0);
+  EXPECT_EQ(config->inventoryFunctionNames[0],"inventoryVertex");
+  EXPECT_EQ(config->inventoryFunctionNames[1],"inventoryFragment");
   }
 
 TEST(MetalBuiltinRuntime,RejectsInvalidOfflineManifest) {
@@ -131,6 +178,52 @@ TEST(MetalBuiltinRuntime,RejectsInvalidOfflineManifest) {
   manifest.textureFragmentFunction = manifest.textureVertexFunction;
   EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
                std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  manifest.inventoryVertexSpirv = inventoryVertexSource.data();
+  manifest.inventoryVertexSpirvSize = sizeof(inventoryVertexSource);
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  addInventoryPair(manifest);
+  manifest.inventoryFragmentSpirv = manifest.inventoryVertexSpirv;
+  manifest.inventoryFragmentSpirvSize = manifest.inventoryVertexSpirvSize;
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  addInventoryPair(manifest);
+  manifest.inventoryFragmentFunction = manifest.inventoryVertexFunction;
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+  }
+
+TEST(MetalBuiltinRuntime,ClassifiesExactInventoryManifestSources) {
+  auto manifest = validOfflineManifest();
+  addInventoryPair(manifest);
+  const auto config = makeMetalBuiltinOfflineConfig(manifest);
+
+  EXPECT_EQ(classifyMetalInventoryOfflineSource(
+                *config,inventoryVertexSource.data(),
+                sizeof(inventoryVertexSource)),
+            Detail::MetalInventoryOfflineRole::Vertex);
+  EXPECT_EQ(classifyMetalInventoryOfflineSource(
+                *config,inventoryFragmentSource.data(),
+                sizeof(inventoryFragmentSource)),
+            Detail::MetalInventoryOfflineRole::Fragment);
+  EXPECT_EQ(classifyMetalInventoryOfflineSource(
+                *config,inventoryVertexSource.data(),
+                sizeof(inventoryVertexSource)-sizeof(uint32_t)),
+            Detail::MetalInventoryOfflineRole::None);
+
+  auto mutated = inventoryVertexSource;
+  mutated.back() ^= 1u;
+  EXPECT_EQ(classifyMetalInventoryOfflineSource(
+                *config,mutated.data(),sizeof(mutated)),
+            Detail::MetalInventoryOfflineRole::None);
+  EXPECT_EQ(classifyMetalInventoryOfflineSource(*config,nullptr,0),
+            Detail::MetalInventoryOfflineRole::None);
   }
 
 TEST(MetalBuiltinRuntime,ValidatesAndConfiguresOfflineReflection) {
@@ -191,6 +284,57 @@ TEST(MetalBuiltinRuntime,RejectsMismatchedOfflineReflection) {
       MetalBuiltinSourceRole::ColorFragment,
       Detail::ShaderReflection::Stage::Fragment,
       {},wrongBindings));
+  }
+
+TEST(MetalBuiltinRuntime,ValidatesInventoryOfflineReflection) {
+  using Binding = Detail::ShaderReflection::Binding;
+  using Class = Detail::ShaderReflection::Class;
+  using Stage = Detail::ShaderReflection::Stage;
+  const std::vector<Decl::ComponentType> vertexDecl = {
+      Decl::ComponentType::float3,
+      Decl::ComponentType::float3,
+      Decl::ComponentType::float2,
+      Decl::ComponentType::uint1,
+      };
+  Binding push;
+  push.layout = 0;
+  push.cls = Class::Push;
+  push.stage = Stage::Vertex;
+  push.byteSize = 64;
+  std::vector<Binding> vertexLayout = {push};
+  EXPECT_TRUE(configureMetalInventoryOfflineReflection(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Stage::Vertex,vertexDecl,vertexLayout));
+  EXPECT_EQ(vertexLayout[0].mslBinding,0);
+  EXPECT_EQ(vertexLayout[0].mslBinding2,uint32_t(-1));
+  EXPECT_EQ(vertexLayout[0].mslSize,64);
+
+  Binding texture = builtinTextureBinding();
+  std::vector<Binding> fragmentLayout = {texture};
+  EXPECT_TRUE(configureMetalInventoryOfflineReflection(
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Stage::Fragment,{},fragmentLayout));
+  EXPECT_EQ(fragmentLayout[0].mslBinding,0);
+  EXPECT_EQ(fragmentLayout[0].mslBinding2,0);
+
+  vertexLayout = {push};
+  auto wrongDecl = vertexDecl;
+  wrongDecl[1] = Decl::ComponentType::float2;
+  EXPECT_FALSE(configureMetalInventoryOfflineReflection(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Stage::Vertex,wrongDecl,vertexLayout));
+
+  push.byteSize = 60;
+  vertexLayout = {push};
+  EXPECT_FALSE(configureMetalInventoryOfflineReflection(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Stage::Vertex,vertexDecl,vertexLayout));
+
+  texture.layout = 1;
+  fragmentLayout = {texture};
+  EXPECT_FALSE(configureMetalInventoryOfflineReflection(
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Stage::Fragment,{},fragmentLayout));
   }
 
 TEST(MetalBuiltinRuntime,ClassifiesOnlyExactGeneratedSources) {

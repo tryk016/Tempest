@@ -46,7 +46,9 @@ if(APPLE)
   add_dependencies(${PROJECT_NAME} MetalBuiltinOfflineTestLibrary)
   target_compile_definitions(
     ${PROJECT_NAME} PRIVATE
-    "TEMPEST_TEST_METAL_BUILTIN_OFFLINE_LIBRARY=\"${METAL_BUILTIN_OFFLINE_TEST_LIBRARY}\"")
+    "TEMPEST_TEST_METAL_BUILTIN_OFFLINE_LIBRARY=\"${METAL_BUILTIN_OFFLINE_TEST_LIBRARY}\""
+    "TEMPEST_TEST_METAL_INVENTORY_VERTEX_SPIRV=\"${CMAKE_CURRENT_BINARY_DIR}/testsuite/shader/inventory_offline_test.vert.sprv\""
+    "TEMPEST_TEST_METAL_INVENTORY_FRAGMENT_SPIRV=\"${CMAKE_CURRENT_BINARY_DIR}/testsuite/shader/inventory_offline_test.frag.sprv\"")
 endif()
 
 add_definitions(-DGTEST_LANG_CXX11=1)
@@ -160,6 +162,8 @@ compile_shader(loop_defect.comp)
 
 compile_shader(texture.vert)
 compile_shader(texture.frag)
+compile_shader(inventory_offline_test.vert)
+compile_shader(inventory_offline_test.frag)
 
 compile_shader(ray_test.frag)
 compile_shader(ray_test_face.frag)

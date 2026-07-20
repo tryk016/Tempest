@@ -10,7 +10,9 @@
 #include <gmock/gmock-matchers.h>
 
 #include <array>
+#include <fstream>
 #include <stdexcept>
+#include <vector>
 
 #include "gapi_test_common.h"
 
@@ -43,6 +45,45 @@ MetalBuiltinOfflineManifest testOfflineBuiltinManifest() {
   manifest.colorFragmentFunction = "tempestOfflineColorFragment";
   manifest.textureVertexFunction = "tempestOfflineTextureVertex";
   manifest.textureFragmentFunction = "tempestOfflineTextureFragment";
+  return manifest;
+  }
+
+std::vector<uint32_t> readSpirvFile(const char* path) {
+  std::ifstream input(path,std::ios::binary|std::ios::ate);
+  if(!input)
+    throw std::runtime_error(std::string("unable to open ")+path);
+  const std::streamoff byteSize = input.tellg();
+  if(byteSize<=0 || byteSize%sizeof(uint32_t)!=0)
+    throw std::runtime_error(std::string("invalid SPIR-V size in ")+path);
+  std::vector<uint32_t> spirv(
+      static_cast<size_t>(byteSize)/sizeof(uint32_t));
+  input.seekg(0);
+  input.read(
+      reinterpret_cast<char*>(spirv.data()),
+      static_cast<std::streamsize>(byteSize));
+  if(!input)
+    throw std::runtime_error(std::string("unable to read ")+path);
+  return spirv;
+  }
+
+struct OfflineInventorySources final {
+  std::vector<uint32_t> vertex =
+      readSpirvFile(TEMPEST_TEST_METAL_INVENTORY_VERTEX_SPIRV);
+  std::vector<uint32_t> fragment =
+      readSpirvFile(TEMPEST_TEST_METAL_INVENTORY_FRAGMENT_SPIRV);
+};
+
+MetalBuiltinOfflineManifest testOfflineInventoryManifest(
+    const OfflineInventorySources& sources) {
+  auto manifest = testOfflineBuiltinManifest();
+  manifest.inventoryVertexSpirv = sources.vertex.data();
+  manifest.inventoryVertexSpirvSize =
+      sources.vertex.size()*sizeof(uint32_t);
+  manifest.inventoryVertexFunction = "tempestOfflineInventoryVertex";
+  manifest.inventoryFragmentSpirv = sources.fragment.data();
+  manifest.inventoryFragmentSpirvSize =
+      sources.fragment.size()*sizeof(uint32_t);
+  manifest.inventoryFragmentFunction = "tempestOfflineInventoryFragment";
   return manifest;
   }
 
@@ -370,6 +411,119 @@ TEST(MetalApi,OfflineBuiltinManifestFailsClosed) {
   catch(const std::system_error& e) {
     EXPECT_EQ(e.code(),Tempest::GraphicsErrc::InvalidShaderModule);
     }
+#endif
+  }
+
+TEST(MetalApi,OfflineInventoryMetallib) {
+#if defined(__OSX__)
+  try {
+    const OfflineInventorySources sources;
+    const auto manifest = testOfflineInventoryManifest(sources);
+    MetalApi api{ApiFlags::Validation,manifest};
+    Device device(api);
+
+    const auto initial =
+        MetalApi::runtimeCompilationSnapshot(device);
+    ASSERT_TRUE(initial.available);
+    EXPECT_EQ(initial.sourceLibraryRequests,0);
+    EXPECT_EQ(initial.computePsoRequests,0);
+    EXPECT_EQ(initial.renderPsoRequests,0);
+
+    auto vert = device.shader(
+        sources.vertex.data(),sources.vertex.size()*sizeof(uint32_t));
+    auto frag = device.shader(
+        sources.fragment.data(),sources.fragment.size()*sizeof(uint32_t));
+    const auto afterShaders =
+        MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterShaders.sourceLibraryRequests,0);
+    EXPECT_EQ(afterShaders.computePsoRequests,0);
+    EXPECT_EQ(afterShaders.renderPsoRequests,0);
+
+    RenderState state;
+    state.setCullFaceMode(RenderState::CullMode::NoCull);
+    auto pipeline =
+        device.pipeline(Topology::Triangles,state,vert,frag);
+    const auto afterWrapper =
+        MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterWrapper.sourceLibraryRequests,0);
+    EXPECT_EQ(afterWrapper.computePsoRequests,0);
+    EXPECT_EQ(afterWrapper.renderPsoRequests,0);
+
+    auto target  = device.attachment(TextureFormat::RGBA8,4,4);
+    auto command = device.commandBuffer();
+    {
+      auto encoder = command.startEncoding(device);
+      encoder.setFramebuffer(
+          {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      encoder.setPipeline(pipeline);
+    }
+
+    const auto afterFirstUse =
+        MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterFirstUse.sourceLibraryRequests,0);
+    EXPECT_EQ(afterFirstUse.computePsoRequests,0);
+    EXPECT_EQ(afterFirstUse.renderPsoRequests,1);
+  }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping offline Metal inventory testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,OfflineInventoryManifestFailsClosed) {
+#if defined(__OSX__)
+  try {
+    MetalApi availableApi;
+    Device availableDevice(availableApi);
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice) {
+      Log::d("Skipping offline Metal inventory fail-closed testcase: ",
+             e.what());
+      return;
+      }
+    throw;
+    }
+
+  const OfflineInventorySources sources;
+
+  auto missingFunction = testOfflineInventoryManifest(sources);
+  missingFunction.inventoryFragmentFunction =
+      "tempestOfflineMissingInventoryFragment";
+  MetalApi missingFunctionApi{ApiFlags::NoFlags,missingFunction};
+  Device missingFunctionDevice(missingFunctionApi);
+  try {
+    (void)missingFunctionDevice.shader(
+        sources.fragment.data(),
+        sources.fragment.size()*sizeof(uint32_t));
+    FAIL() << "missing offline inventory function unexpectedly fell back";
+    }
+  catch(const std::system_error& e) {
+    EXPECT_EQ(e.code(),Tempest::GraphicsErrc::InvalidShaderModule);
+    }
+  const auto afterMissingFunction =
+      MetalApi::runtimeCompilationSnapshot(missingFunctionDevice);
+  EXPECT_EQ(afterMissingFunction.sourceLibraryRequests,0);
+
+  auto wrongStage = testOfflineInventoryManifest(sources);
+  wrongStage.inventoryFragmentFunction =
+      "tempestOfflineWrongInventoryFragmentStage";
+  MetalApi wrongStageApi{ApiFlags::NoFlags,wrongStage};
+  Device wrongStageDevice(wrongStageApi);
+  try {
+    (void)wrongStageDevice.shader(
+        sources.fragment.data(),
+        sources.fragment.size()*sizeof(uint32_t));
+    FAIL() << "wrong-stage offline inventory function was accepted";
+    }
+  catch(const std::system_error& e) {
+    EXPECT_EQ(e.code(),Tempest::GraphicsErrc::InvalidShaderModule);
+    }
+  const auto afterWrongStage =
+      MetalApi::runtimeCompilationSnapshot(wrongStageDevice);
+  EXPECT_EQ(afterWrongStage.sourceLibraryRequests,0);
 #endif
   }
 

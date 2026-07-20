@@ -291,6 +291,23 @@ class MtDevice : public AbstractGraphicsApi::Device {
         return nullptr;
       return &builtinOffline->functionNames[index];
       }
+    MetalInventoryOfflineRole inventoryOfflineSourceRole(
+        const void* source, size_t sourceSize) const noexcept {
+      if(builtinOffline==nullptr)
+        return MetalInventoryOfflineRole::None;
+      return classifyMetalInventoryOfflineSource(
+          *builtinOffline,source,sourceSize);
+      }
+    const std::string* inventoryOfflineFunctionName(
+        MetalInventoryOfflineRole role) const noexcept {
+      if(builtinOffline==nullptr)
+        return nullptr;
+      const size_t index = metalInventoryOfflineRoleIndex(role);
+      if(index>=builtinOffline->inventoryFunctionNames.size() ||
+         builtinOffline->inventoryFunctionNames[index].empty())
+        return nullptr;
+      return &builtinOffline->inventoryFunctionNames[index];
+      }
 
     void noteSourceLibraryRequest() noexcept {
       sourceLibraryRequestCount.fetch_add(1,std::memory_order_relaxed);
