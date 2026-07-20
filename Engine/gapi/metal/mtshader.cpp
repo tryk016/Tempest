@@ -25,6 +25,49 @@ MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
   : Shader(source, srcSize) {
   builtinSourceRole = classifyMetalBuiltinSource(source,srcSize);
   auto pool = NsPtr<NS::AutoreleasePool>::init();
+
+  if(const std::string* functionName =
+         dev.builtinOfflineFunctionName(builtinSourceRole);
+     functionName!=nullptr) {
+    if(!configureMetalBuiltinOfflineReflection(
+           builtinSourceRole,stage,vert.decl,lay))
+      throw std::system_error(
+          Tempest::GraphicsErrc::InvalidShaderModule,
+          "Builtin SPIR-V interface does not match offline Metal ABI");
+
+    MTL::Library* offlineLibrary = dev.builtinOfflineLibrary();
+    if(offlineLibrary==nullptr)
+      throw std::system_error(
+          Tempest::GraphicsErrc::InvalidShaderModule,
+          "offline Metal library is unavailable");
+    offlineLibrary->retain();
+    library = NsPtr<MTL::Library>(offlineLibrary);
+
+    auto name = NsPtr<NS::String>(NS::String::string(
+        functionName->c_str(),NS::UTF8StringEncoding));
+    name->retain();
+    auto cvar = NsPtr<MTL::FunctionConstantValues>::init();
+    NS::Error* error = nullptr;
+    impl = NsPtr<MTL::Function>(
+        library->newFunction(name.get(),cvar.get(),&error));
+
+    const bool vertex =
+        builtinSourceRole==MetalBuiltinSourceRole::ColorVertex ||
+        builtinSourceRole==MetalBuiltinSourceRole::TextureVertex;
+    const MTL::FunctionType expectedType =
+        vertex ? MTL::FunctionTypeVertex : MTL::FunctionTypeFragment;
+    if(impl==nullptr || error!=nullptr ||
+       impl->functionType()!=expectedType) {
+      const char* message =
+          error==nullptr
+              ? "offline Metal Builtin function is missing or has wrong stage"
+              : error->localizedDescription()->utf8String();
+      throw std::system_error(
+          Tempest::GraphicsErrc::InvalidShaderModule,message);
+      }
+    return;
+    }
+
   spirv_cross::CompilerMSL::Options optMSL;
 #if defined(__OSX__)
   optMSL.platform = spirv_cross::CompilerMSL::Options::macOS;

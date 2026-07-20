@@ -18,6 +18,7 @@
 #include "../utility/compiller_hints.h"
 #include "gapi/shaderreflection.h"
 #include "gapi/metal/mtasyncstate.h"
+#include "gapi/metal/mtbuiltinruntime.h"
 #include "gapi/metal/mtsync.h"
 #include "gapi/metal/mtsamplercache.h"
 #include "nsptr.h"
@@ -253,7 +254,10 @@ inline MTL::RenderStages nativeFormat(ShaderReflection::Stage st) {
 
 class MtDevice : public AbstractGraphicsApi::Device {
   public:
-    MtDevice(std::string_view name, bool validation);
+    MtDevice(
+        std::string_view name,
+        bool validation,
+        std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline = {});
     ~MtDevice();
 
     static const uint32_t MaxFences = 32;
@@ -275,6 +279,18 @@ class MtDevice : public AbstractGraphicsApi::Device {
     void     waitIdle() override;
     PresentFailure takePresentFailure() noexcept override;
     std::shared_ptr<MtAsyncState> asyncState() const noexcept { return async; }
+    MTL::Library* builtinOfflineLibrary() const noexcept {
+      return builtinOfflineLibraryImpl.get();
+      }
+    const std::string* builtinOfflineFunctionName(
+        MetalBuiltinSourceRole role) const noexcept {
+      if(builtinOffline==nullptr)
+        return nullptr;
+      const size_t index = metalBuiltinSourceRoleIndex(role);
+      if(index>=builtinOffline->functionNames.size())
+        return nullptr;
+      return &builtinOffline->functionNames[index];
+      }
 
     void noteSourceLibraryRequest() noexcept {
       sourceLibraryRequestCount.fetch_add(1,std::memory_order_relaxed);
@@ -348,6 +364,8 @@ class MtDevice : public AbstractGraphicsApi::Device {
     static void deductProps(AbstractGraphicsApi::Props& prop, MTL::Device& dev);
 
   private:
+    std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline;
+    NsPtr<MTL::Library> builtinOfflineLibraryImpl;
     std::atomic<uint64_t> sourceLibraryRequestCount = 0;
     std::atomic<uint64_t> computePsoRequestCount    = 0;
     std::atomic<uint64_t> renderPsoRequestCount     = 0;

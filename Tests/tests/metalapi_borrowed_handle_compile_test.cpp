@@ -9,6 +9,7 @@ using Tempest::BorrowedMetalBuffer;
 using Tempest::BorrowedMetalDevice;
 using Tempest::BorrowedMetalTexture;
 using Tempest::MetalBuiltinRenderRole;
+using Tempest::MetalBuiltinOfflineManifest;
 using Tempest::MetalBuiltinRuntimeSnapshot;
 using Tempest::MetalBuiltinSourceRole;
 using Tempest::MetalRuntimeCompilationSnapshot;
@@ -65,6 +66,27 @@ static_assert(Tempest::metalBuiltinSourceRoleIndex(
                   MetalBuiltinSourceRole::None)==0xFF);
 static_assert(Tempest::metalBuiltinRenderRoleIndex(
                   MetalBuiltinRenderRole::None)==0xFF);
+
+static_assert(std::is_trivially_copyable_v<MetalBuiltinOfflineManifest>);
+static_assert(std::is_trivially_destructible_v<MetalBuiltinOfflineManifest>);
+static_assert(std::is_standard_layout_v<MetalBuiltinOfflineManifest>);
+static_assert(std::is_aggregate_v<MetalBuiltinOfflineManifest>);
+static_assert(sizeof(MetalBuiltinOfflineManifest)==
+              MetalBuiltinOfflineManifest::StructSize);
+constexpr MetalBuiltinOfflineManifest emptyOfflineManifest;
+static_assert(emptyOfflineManifest.abiVersion==
+              MetalBuiltinOfflineManifest::AbiVersion);
+static_assert(emptyOfflineManifest.structSize==
+              MetalBuiltinOfflineManifest::StructSize);
+static_assert(emptyOfflineManifest.metallibPath==nullptr);
+static_assert(emptyOfflineManifest.colorVertexFunction==nullptr);
+static_assert(emptyOfflineManifest.colorFragmentFunction==nullptr);
+static_assert(emptyOfflineManifest.textureVertexFunction==nullptr);
+static_assert(emptyOfflineManifest.textureFragmentFunction==nullptr);
+static_assert(std::is_constructible_v<
+              Tempest::MetalApi,
+              Tempest::ApiFlags,
+              const MetalBuiltinOfflineManifest&>);
 
 static_assert(std::is_same_v<
               decltype(Tempest::MetalApi::borrowDevice(

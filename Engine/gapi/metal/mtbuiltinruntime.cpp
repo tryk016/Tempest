@@ -2,7 +2,9 @@
 
 #include "builtin_shader.h"
 
+#include <algorithm>
 #include <cstring>
+#include <stdexcept>
 
 using namespace Tempest;
 using namespace Tempest::Detail;
@@ -23,6 +25,10 @@ enum class BlendRole : uint8_t {
   None,
   };
 
+bool validManifestString(const char* value) noexcept {
+  return value!=nullptr && value[0]!='\0';
+  }
+
 BlendRole classifyBlend(const RenderState& state) noexcept {
   if(state.blendOperation()!=RenderState::BlendOp::Add)
     return BlendRole::None;
@@ -41,6 +47,40 @@ BlendRole classifyBlend(const RenderState& state) noexcept {
 
 }
 
+std::shared_ptr<const MetalBuiltinOfflineConfig>
+Tempest::Detail::makeMetalBuiltinOfflineConfig(
+    const MetalBuiltinOfflineManifest& manifest) {
+  if(manifest.abiVersion!=MetalBuiltinOfflineManifest::AbiVersion ||
+     manifest.structSize!=MetalBuiltinOfflineManifest::StructSize)
+    throw std::invalid_argument("Metal Builtin offline manifest ABI mismatch");
+
+  const std::array<const char*,4> names = {{
+      manifest.colorVertexFunction,
+      manifest.colorFragmentFunction,
+      manifest.textureVertexFunction,
+      manifest.textureFragmentFunction,
+      }};
+  if(!validManifestString(manifest.metallibPath) ||
+     manifest.metallibPath[0]!='/')
+    throw std::invalid_argument(
+        "Metal Builtin offline metallib path must be absolute");
+  for(const char* name:names)
+    if(!validManifestString(name))
+      throw std::invalid_argument(
+          "Metal Builtin offline function name is missing");
+  for(size_t i=0; i<names.size(); ++i)
+    for(size_t r=0; r<i; ++r)
+      if(std::strcmp(names[i],names[r])==0)
+        throw std::invalid_argument(
+            "Metal Builtin offline function names must be distinct");
+
+  auto config = std::make_shared<MetalBuiltinOfflineConfig>();
+  config->metallibPath = manifest.metallibPath;
+  for(size_t i=0; i<names.size(); ++i)
+    config->functionNames[i] = names[i];
+  return config;
+  }
+
 MetalBuiltinSourceRole Tempest::Detail::classifyMetalBuiltinSource(
     const void* source, size_t sourceSize) noexcept {
   if(sourceEquals(source,sourceSize,empty_vert_sprv))
@@ -52,6 +92,61 @@ MetalBuiltinSourceRole Tempest::Detail::classifyMetalBuiltinSource(
   if(sourceEquals(source,sourceSize,tex_brush_frag_sprv))
     return MetalBuiltinSourceRole::TextureFragment;
   return MetalBuiltinSourceRole::None;
+  }
+
+bool Tempest::Detail::configureMetalBuiltinOfflineReflection(
+    MetalBuiltinSourceRole role,
+    ShaderReflection::Stage stage,
+    const std::vector<Decl::ComponentType>& vertexDecl,
+    std::vector<ShaderReflection::Binding>& layout) noexcept {
+  using Component = Decl::ComponentType;
+  using Reflection = ShaderReflection;
+
+  const bool vertex =
+      role==MetalBuiltinSourceRole::ColorVertex ||
+      role==MetalBuiltinSourceRole::TextureVertex;
+  const bool fragment =
+      role==MetalBuiltinSourceRole::ColorFragment ||
+      role==MetalBuiltinSourceRole::TextureFragment;
+  if(!vertex && !fragment)
+    return false;
+
+  const std::array<Component,3> expectedDecl = {{
+      Component::float3,
+      Component::float2,
+      Component::float4,
+      }};
+  if(vertex) {
+    if(stage!=Reflection::Stage::Vertex ||
+       vertexDecl.size()!=expectedDecl.size() ||
+       !std::equal(vertexDecl.begin(),vertexDecl.end(),
+                   expectedDecl.begin()))
+      return false;
+    }
+  else if(stage!=Reflection::Stage::Fragment || !vertexDecl.empty()) {
+    return false;
+    }
+
+  if(role!=MetalBuiltinSourceRole::TextureFragment)
+    return layout.empty();
+  if(layout.size()!=1)
+    return false;
+
+  auto& binding = layout[0];
+  if(binding.layout!=0 ||
+     binding.cls!=Reflection::Class::Texture ||
+     binding.stage!=Reflection::Stage::Fragment ||
+     binding.runtimeSized ||
+     binding.is3DImage ||
+     binding.arraySize!=1 ||
+     binding.byteSize!=0 ||
+     binding.varByteSize!=0)
+    return false;
+
+  binding.mslBinding  = 0;
+  binding.mslBinding2 = 0;
+  binding.mslSize     = 0;
+  return true;
   }
 
 MetalBuiltinRenderRole Tempest::Detail::classifyMetalBuiltinRenderRole(

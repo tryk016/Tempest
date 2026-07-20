@@ -14,6 +14,7 @@
 #include <Tempest/Texture2d>
 
 #include "gapi/metal/mtdevice.h"
+#include "gapi/metal/mtbuiltinruntime.h"
 #include "gapi/metal/mtbuffer.h"
 #include "gapi/metal/mtshader.h"
 #include "gapi/metal/mtpipeline.h"
@@ -37,6 +38,13 @@ MetalApi::MetalApi(ApiFlags f) {
     setenv("METAL_ERROR_MODE",         "5",0);
     validation = true;
     }
+  }
+
+MetalApi::MetalApi(
+    ApiFlags f,
+    const MetalBuiltinOfflineManifest& manifest)
+  :MetalApi(f) {
+  builtinOffline = makeMetalBuiltinOfflineConfig(manifest);
   }
 
 MetalApi::~MetalApi() {
@@ -167,7 +175,7 @@ std::vector<AbstractGraphicsApi::Props> MetalApi::devices() const {
   }
 
 AbstractGraphicsApi::Device* MetalApi::createDevice(std::string_view gpuName) {
-  return new MtDevice(gpuName,validation);
+  return new MtDevice(gpuName,validation,builtinOffline);
   }
 
 AbstractGraphicsApi::Swapchain *MetalApi::createSwapchain(SystemApi::Window *w,

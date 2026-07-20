@@ -35,8 +35,14 @@ static MTL::LanguageVersion languageVersion() {
   return std::min<MTL::LanguageVersion>(MTL::LanguageVersion3_1, opt->languageVersion());
   }
 
-MtDevice::MtDevice(std::string_view name, bool validation)
-  : impl(mkDevice(name)), samplers(*impl), validation(validation) {
+MtDevice::MtDevice(
+    std::string_view name,
+    bool validation,
+    std::shared_ptr<const MetalBuiltinOfflineConfig> builtinOffline)
+  : impl(mkDevice(name)),
+    samplers(*impl),
+    validation(validation),
+    builtinOffline(std::move(builtinOffline)) {
   if(impl.get()==nullptr)
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 
@@ -46,6 +52,25 @@ MtDevice::MtDevice(std::string_view name, bool validation)
   queue = NsPtr<MTL::CommandQueue>(impl->newCommandQueue());
   if(queue.get()==nullptr)
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+
+  if(this->builtinOffline!=nullptr) {
+    auto pool = NsPtr<NS::AutoreleasePool>::init();
+    auto path = NsPtr<NS::String>(NS::String::string(
+        this->builtinOffline->metallibPath.c_str(),NS::UTF8StringEncoding));
+    path->retain();
+    auto url = NsPtr<NS::URL>(NS::URL::fileURLWithPath(path.get()));
+    url->retain();
+    NS::Error* error = nullptr;
+    builtinOfflineLibraryImpl =
+        NsPtr<MTL::Library>(impl->newLibrary(url.get(),&error));
+    if(builtinOfflineLibraryImpl==nullptr || error!=nullptr) {
+      const char* message =
+          error==nullptr ? "unable to load offline Metal library"
+                         : error->localizedDescription()->utf8String();
+      throw std::system_error(
+          Tempest::GraphicsErrc::InvalidShaderModule,message);
+      }
+    }
 
   int32_t majorVersion = 0, minorVersion = 0;
   if([[NSProcessInfo processInfo] respondsToSelector:@selector(operatingSystemVersion)]) {

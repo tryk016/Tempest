@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 namespace MTL {
 class Device;
@@ -14,6 +15,10 @@ class RenderCommandEncoder;
 }
 
 namespace Tempest {
+
+namespace Detail {
+struct MetalBuiltinOfflineConfig;
+}
 
 class CommandBuffer;
 class Device;
@@ -116,9 +121,27 @@ struct MetalBuiltinRuntimeSnapshot final {
       renderPsoRequests = {};
   };
 
+// Versioned C-compatible view of the four Tempest Builtin shader entry points
+// in an offline Metal library. All strings are copied by MetalApi. The path is
+// UTF-8 and must be absolute.
+struct MetalBuiltinOfflineManifest final {
+  static constexpr uint32_t AbiVersion = 1;
+  static constexpr uint32_t StructSize =
+      2*sizeof(uint32_t) + 5*sizeof(const char*);
+
+  uint32_t    abiVersion = AbiVersion;
+  uint32_t    structSize = StructSize;
+  const char* metallibPath = nullptr;
+  const char* colorVertexFunction = nullptr;
+  const char* colorFragmentFunction = nullptr;
+  const char* textureVertexFunction = nullptr;
+  const char* textureFragmentFunction = nullptr;
+  };
+
 class MetalApi : public AbstractGraphicsApi {
   public:
     explicit MetalApi(ApiFlags f=ApiFlags::NoFlags);
+    MetalApi(ApiFlags f, const MetalBuiltinOfflineManifest& manifest);
     ~MetalApi();
 
     std::vector<Props> devices() const override;
@@ -184,6 +207,8 @@ class MetalApi : public AbstractGraphicsApi {
     void           getCaps(Device *d, Props& caps) override;
 
   private:
+    std::shared_ptr<const Detail::MetalBuiltinOfflineConfig>
+                   builtinOffline;
     bool           validation = false;
   };
 

@@ -35,6 +35,17 @@ void throwFromActiveRenderEncoder(void*,
   throw std::runtime_error("active render encoder callback");
   }
 
+MetalBuiltinOfflineManifest testOfflineBuiltinManifest() {
+  MetalBuiltinOfflineManifest manifest;
+  manifest.metallibPath =
+      TEMPEST_TEST_METAL_BUILTIN_OFFLINE_LIBRARY;
+  manifest.colorVertexFunction = "tempestOfflineColorVertex";
+  manifest.colorFragmentFunction = "tempestOfflineColorFragment";
+  manifest.textureVertexFunction = "tempestOfflineTextureVertex";
+  manifest.textureFragmentFunction = "tempestOfflineTextureFragment";
+  return manifest;
+  }
+
 }
 #endif
 
@@ -243,6 +254,121 @@ TEST(MetalApi,BuiltinRuntimeCounters) {
     if(e.code()==Tempest::GraphicsErrc::NoDevice)
       Log::d("Skipping Metal builtin runtime counters testcase: ",e.what()); else
       throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,OfflineBuiltinMetallib) {
+#if defined(__OSX__)
+  try {
+    const auto manifest = testOfflineBuiltinManifest();
+    MetalApi api{ApiFlags::Validation,manifest};
+    Device device(api);
+
+    const auto initialRuntime =
+        MetalApi::runtimeCompilationSnapshot(device);
+    ASSERT_TRUE(initialRuntime.available);
+    EXPECT_EQ(initialRuntime.sourceLibraryRequests,0);
+
+    const auto initialBuiltin =
+        MetalApi::builtinRuntimeSnapshot(device);
+    ASSERT_TRUE(initialBuiltin.available);
+    for(const uint64_t count:initialBuiltin.sourceLibraryRequests)
+      EXPECT_EQ(count,0);
+    for(const uint64_t count:initialBuiltin.renderPsoRequests)
+      EXPECT_EQ(count,0);
+
+    const auto& color   = device.builtin().empty();
+    const auto& texture = device.builtin().texture2d();
+    const std::array<const RenderPipeline*,12> pipelines = {{
+        &color.pen,&color.brush,
+        &color.penB,&color.brushB,
+        &color.penA,&color.brushA,
+        &texture.pen,&texture.brush,
+        &texture.penB,&texture.brushB,
+        &texture.penA,&texture.brushA,
+        }};
+
+    auto target  = device.attachment(TextureFormat::RGBA8,4,4);
+    auto command = device.commandBuffer();
+    {
+      auto encoder = command.startEncoding(device);
+      encoder.setFramebuffer(
+          {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      for(const RenderPipeline* pipeline:pipelines)
+        encoder.setPipeline(*pipeline);
+      }
+
+    const auto afterRuntime =
+        MetalApi::runtimeCompilationSnapshot(device);
+    EXPECT_EQ(afterRuntime.sourceLibraryRequests,0);
+    EXPECT_EQ(afterRuntime.computePsoRequests,0);
+    EXPECT_EQ(afterRuntime.renderPsoRequests,12);
+
+    const auto afterBuiltin =
+        MetalApi::builtinRuntimeSnapshot(device);
+    for(const uint64_t count:afterBuiltin.sourceLibraryRequests)
+      EXPECT_EQ(count,0);
+    for(const uint64_t count:afterBuiltin.renderPsoRequests)
+      EXPECT_EQ(count,1);
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping offline Metal Builtin testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,OfflineBuiltinManifestFailsClosed) {
+#if defined(__OSX__)
+  try {
+    MetalApi availableApi;
+    Device availableDevice(availableApi);
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice) {
+      Log::d("Skipping offline Metal Builtin fail-closed testcase: ",
+             e.what());
+      return;
+      }
+    throw;
+    }
+
+  auto missingLibrary = testOfflineBuiltinManifest();
+  missingLibrary.metallibPath =
+      "/tmp/tempest-does-not-exist/metal_builtin_offline.metallib";
+  MetalApi missingLibraryApi{ApiFlags::NoFlags,missingLibrary};
+  try {
+    Device device(missingLibraryApi);
+    FAIL() << "missing offline metallib unexpectedly loaded";
+    }
+  catch(const std::system_error& e) {
+    EXPECT_EQ(e.code(),Tempest::GraphicsErrc::InvalidShaderModule);
+    }
+
+  auto missingFunction = testOfflineBuiltinManifest();
+  missingFunction.textureFragmentFunction =
+      "tempestOfflineMissingTextureFragment";
+  MetalApi missingFunctionApi{ApiFlags::NoFlags,missingFunction};
+  try {
+    Device device(missingFunctionApi);
+    FAIL() << "missing offline Builtin function unexpectedly fell back";
+    }
+  catch(const std::system_error& e) {
+    EXPECT_EQ(e.code(),Tempest::GraphicsErrc::InvalidShaderModule);
+    }
+
+  auto wrongStage = testOfflineBuiltinManifest();
+  wrongStage.textureFragmentFunction =
+      "tempestOfflineWrongFragmentStage";
+  MetalApi wrongStageApi{ApiFlags::NoFlags,wrongStage};
+  try {
+    Device device(wrongStageApi);
+    FAIL() << "wrong-stage offline Builtin function was accepted";
+    }
+  catch(const std::system_error& e) {
+    EXPECT_EQ(e.code(),Tempest::GraphicsErrc::InvalidShaderModule);
     }
 #endif
   }

@@ -12,11 +12,41 @@ add_executable(${PROJECT_NAME})
 add_test(${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PRIVATE .)
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/../../Engine")
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/../../Engine/include")
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/build/sprv")
 if(APPLE)
   target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/../../Engine/thirdparty/metal-cpp")
+
+  find_program(XCRUN_EXECUTABLE xcrun REQUIRED)
+  set(METAL_BUILTIN_OFFLINE_TEST_SOURCE
+      "${CMAKE_SOURCE_DIR}/../assets/metal_builtin_offline_test.metal")
+  set(METAL_BUILTIN_OFFLINE_TEST_AIR
+      "${CMAKE_CURRENT_BINARY_DIR}/testsuite/metal_builtin_offline_test.air")
+  set(METAL_BUILTIN_OFFLINE_TEST_LIBRARY
+      "${CMAKE_CURRENT_BINARY_DIR}/testsuite/metal_builtin_offline_test.metallib")
+  add_custom_command(
+    OUTPUT
+      "${METAL_BUILTIN_OFFLINE_TEST_AIR}"
+      "${METAL_BUILTIN_OFFLINE_TEST_LIBRARY}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_CURRENT_BINARY_DIR}/testsuite"
+    COMMAND ${XCRUN_EXECUTABLE} --sdk macosx metal -c
+            "${METAL_BUILTIN_OFFLINE_TEST_SOURCE}"
+            -o "${METAL_BUILTIN_OFFLINE_TEST_AIR}"
+    COMMAND ${XCRUN_EXECUTABLE} --sdk macosx metallib
+            "${METAL_BUILTIN_OFFLINE_TEST_AIR}"
+            -o "${METAL_BUILTIN_OFFLINE_TEST_LIBRARY}"
+    DEPENDS "${METAL_BUILTIN_OFFLINE_TEST_SOURCE}"
+    VERBATIM)
+  add_custom_target(
+    MetalBuiltinOfflineTestLibrary
+    DEPENDS "${METAL_BUILTIN_OFFLINE_TEST_LIBRARY}")
+  add_dependencies(${PROJECT_NAME} MetalBuiltinOfflineTestLibrary)
+  target_compile_definitions(
+    ${PROJECT_NAME} PRIVATE
+    "TEMPEST_TEST_METAL_BUILTIN_OFFLINE_LIBRARY=\"${METAL_BUILTIN_OFFLINE_TEST_LIBRARY}\"")
 endif()
 
 add_definitions(-DGTEST_LANG_CXX11=1)

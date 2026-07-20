@@ -6,6 +6,8 @@
 
 #include <array>
 #include <cstdint>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace Tempest;
@@ -14,6 +16,8 @@ namespace {
 
 using Tempest::Detail::classifyMetalBuiltinRenderRole;
 using Tempest::Detail::classifyMetalBuiltinSource;
+using Tempest::Detail::configureMetalBuiltinOfflineReflection;
+using Tempest::Detail::makeMetalBuiltinOfflineConfig;
 
 template<size_t N>
 void expectExactSourceRole(const uint8_t (&source)[N],
@@ -42,7 +46,152 @@ RenderState additiveBlend() {
   return state;
   }
 
+MetalBuiltinOfflineManifest validOfflineManifest() {
+  MetalBuiltinOfflineManifest manifest;
+  manifest.metallibPath            = "/tmp/tempest-builtins.metallib";
+  manifest.colorVertexFunction     = "colorVertex";
+  manifest.colorFragmentFunction   = "colorFragment";
+  manifest.textureVertexFunction   = "textureVertex";
+  manifest.textureFragmentFunction = "textureFragment";
+  return manifest;
+  }
+
+std::vector<Decl::ComponentType> builtinVertexDecl() {
+  return {
+      Decl::ComponentType::float3,
+      Decl::ComponentType::float2,
+      Decl::ComponentType::float4,
+      };
+  }
+
+Detail::ShaderReflection::Binding builtinTextureBinding() {
+  Detail::ShaderReflection::Binding binding;
+  binding.layout    = 0;
+  binding.cls       = Detail::ShaderReflection::Class::Texture;
+  binding.stage     = Detail::ShaderReflection::Stage::Fragment;
+  binding.arraySize = 1;
+  return binding;
+  }
+
 }
+
+TEST(MetalBuiltinRuntime,OwnsAndMapsValidOfflineManifest) {
+  std::string path = "/tmp/tempest-builtins.metallib";
+  std::array<std::string,4> names = {{
+      "colorVertex",
+      "colorFragment",
+      "textureVertex",
+      "textureFragment",
+      }};
+  MetalBuiltinOfflineManifest manifest;
+  manifest.metallibPath            = path.c_str();
+  manifest.colorVertexFunction     = names[0].c_str();
+  manifest.colorFragmentFunction   = names[1].c_str();
+  manifest.textureVertexFunction   = names[2].c_str();
+  manifest.textureFragmentFunction = names[3].c_str();
+
+  const auto config = makeMetalBuiltinOfflineConfig(manifest);
+  path[1] = 'X';
+  for(auto& name:names)
+    name[0] = 'X';
+
+  EXPECT_EQ(config->metallibPath,"/tmp/tempest-builtins.metallib");
+  EXPECT_EQ(config->functionNames[metalBuiltinSourceRoleIndex(
+                MetalBuiltinSourceRole::ColorVertex)],"colorVertex");
+  EXPECT_EQ(config->functionNames[metalBuiltinSourceRoleIndex(
+                MetalBuiltinSourceRole::ColorFragment)],"colorFragment");
+  EXPECT_EQ(config->functionNames[metalBuiltinSourceRoleIndex(
+                MetalBuiltinSourceRole::TextureVertex)],"textureVertex");
+  EXPECT_EQ(config->functionNames[metalBuiltinSourceRoleIndex(
+                MetalBuiltinSourceRole::TextureFragment)],"textureFragment");
+  }
+
+TEST(MetalBuiltinRuntime,RejectsInvalidOfflineManifest) {
+  auto manifest = validOfflineManifest();
+  manifest.abiVersion++;
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  manifest.structSize--;
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  manifest.metallibPath = "relative.metallib";
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  manifest.textureFragmentFunction = nullptr;
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+
+  manifest = validOfflineManifest();
+  manifest.textureFragmentFunction = manifest.textureVertexFunction;
+  EXPECT_THROW((void)makeMetalBuiltinOfflineConfig(manifest),
+               std::invalid_argument);
+  }
+
+TEST(MetalBuiltinRuntime,ValidatesAndConfiguresOfflineReflection) {
+  const auto vertexDecl = builtinVertexDecl();
+  std::vector<Detail::ShaderReflection::Binding> noBindings;
+  EXPECT_TRUE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::ColorVertex,
+      Detail::ShaderReflection::Stage::Vertex,
+      vertexDecl,noBindings));
+  EXPECT_TRUE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::TextureVertex,
+      Detail::ShaderReflection::Stage::Vertex,
+      vertexDecl,noBindings));
+  EXPECT_TRUE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::ColorFragment,
+      Detail::ShaderReflection::Stage::Fragment,
+      {},noBindings));
+
+  std::vector<Detail::ShaderReflection::Binding> textureBindings = {
+      builtinTextureBinding(),
+      };
+  EXPECT_TRUE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::TextureFragment,
+      Detail::ShaderReflection::Stage::Fragment,
+      {},textureBindings));
+  ASSERT_EQ(textureBindings.size(),1);
+  EXPECT_EQ(textureBindings[0].mslBinding,0);
+  EXPECT_EQ(textureBindings[0].mslBinding2,0);
+  EXPECT_EQ(textureBindings[0].mslSize,0);
+  }
+
+TEST(MetalBuiltinRuntime,RejectsMismatchedOfflineReflection) {
+  auto vertexDecl = builtinVertexDecl();
+  std::vector<Detail::ShaderReflection::Binding> noBindings;
+  EXPECT_FALSE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::None,
+      Detail::ShaderReflection::Stage::Vertex,
+      vertexDecl,noBindings));
+  EXPECT_FALSE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::ColorVertex,
+      Detail::ShaderReflection::Stage::Fragment,
+      vertexDecl,noBindings));
+
+  vertexDecl[1] = Decl::ComponentType::float3;
+  EXPECT_FALSE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::ColorVertex,
+      Detail::ShaderReflection::Stage::Vertex,
+      vertexDecl,noBindings));
+
+  auto binding = builtinTextureBinding();
+  binding.layout = 1;
+  std::vector<Detail::ShaderReflection::Binding> wrongBindings = {binding};
+  EXPECT_FALSE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::TextureFragment,
+      Detail::ShaderReflection::Stage::Fragment,
+      {},wrongBindings));
+  EXPECT_FALSE(configureMetalBuiltinOfflineReflection(
+      MetalBuiltinSourceRole::ColorFragment,
+      Detail::ShaderReflection::Stage::Fragment,
+      {},wrongBindings));
+  }
 
 TEST(MetalBuiltinRuntime,ClassifiesOnlyExactGeneratedSources) {
   expectExactSourceRole(empty_vert_sprv,
