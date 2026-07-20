@@ -212,12 +212,13 @@ TEST(MetalPipelineArchive,RejectsInvalidConfig) {
                std::invalid_argument);
   }
 
-TEST(MetalPipelineArchive,HardCodesOnlyFirstSliceRenderRoles) {
+TEST(MetalPipelineArchive,HardCodesOnlySelectedRenderRoles) {
   for(size_t i=0;
       i<metalBuiltinRenderRoleIndex(MetalBuiltinRenderRole::Count);
       ++i) {
     const auto role = static_cast<MetalBuiltinRenderRole>(i);
     const bool expected =
+        role==MetalBuiltinRenderRole::ColorTrianglesAlpha ||
         role==MetalBuiltinRenderRole::TextureTrianglesOpaque ||
         role==MetalBuiltinRenderRole::TextureTrianglesAlpha;
     EXPECT_EQ(Tempest::Detail::isMetalPipelineArchiveRenderRole(role),

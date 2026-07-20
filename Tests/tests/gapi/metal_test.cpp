@@ -103,13 +103,17 @@ std::string pipelineArchiveTestPath(const char* suffix) {
 void instantiateArchivedBuiltinPipelines(
     Device& device,
     bool opaque = true,
-    bool alpha = true) {
+    bool alpha = true,
+    bool colorAlpha = true) {
+  const auto& color = device.builtin().empty();
   const auto& texture = device.builtin().texture2d();
   auto target = device.attachment(TextureFormat::RGBA8,4,4);
   auto command = device.commandBuffer();
   auto encoder = command.startEncoding(device);
   encoder.setFramebuffer(
       {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+  if(colorAlpha)
+    encoder.setPipeline(color.brushB);
   if(opaque)
     encoder.setPipeline(texture.brush);
   if(alpha)
@@ -448,13 +452,13 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
           MetalApi::runtimeCompilationSnapshot(device);
       EXPECT_EQ(runtime.sourceLibraryRequests,0u);
       EXPECT_EQ(runtime.computePsoRequests,0u);
-      EXPECT_EQ(runtime.renderPsoRequests,3u);
+      EXPECT_EQ(runtime.renderPsoRequests,4u);
 
       const auto cold =
           MetalApi::pipelineArchiveSnapshot(device);
       EXPECT_EQ(cold.renderHits,0u);
-      EXPECT_EQ(cold.renderMisses,2u);
-      EXPECT_EQ(cold.renderAdds,2u);
+      EXPECT_EQ(cold.renderMisses,3u);
+      EXPECT_EQ(cold.renderAdds,3u);
       EXPECT_EQ(cold.renderFallbacks,0u);
       EXPECT_NE(cold.flags&
                     MetalPipelineArchiveSnapshot::Dirty,0u);
@@ -485,11 +489,11 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
       instantiateArchivedBuiltinPipelines(device);
       const auto runtime =
           MetalApi::runtimeCompilationSnapshot(device);
-      EXPECT_EQ(runtime.renderPsoRequests,2u);
+      EXPECT_EQ(runtime.renderPsoRequests,3u);
 
       const auto warm =
           MetalApi::pipelineArchiveSnapshot(device);
-      EXPECT_EQ(warm.renderHits,2u);
+      EXPECT_EQ(warm.renderHits,3u);
       EXPECT_EQ(warm.renderMisses,0u);
       EXPECT_EQ(warm.renderAdds,0u);
       EXPECT_EQ(warm.renderFallbacks,0u);
@@ -517,8 +521,8 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
       instantiateArchivedBuiltinPipelines(device);
       const auto afterPipelines =
           MetalApi::pipelineArchiveSnapshot(device);
-      EXPECT_EQ(afterPipelines.renderMisses,2u);
-      EXPECT_EQ(afterPipelines.renderAdds,2u);
+      EXPECT_EQ(afterPipelines.renderMisses,3u);
+      EXPECT_EQ(afterPipelines.renderAdds,3u);
       EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
       }
 
@@ -528,7 +532,7 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
       MetalApi api{
           ApiFlags::Validation,manifest,partialConfig};
       Device device(api);
-      instantiateArchivedBuiltinPipelines(device,true,false);
+      instantiateArchivedBuiltinPipelines(device,true,false,false);
       const auto coldPartial =
           MetalApi::pipelineArchiveSnapshot(device);
       EXPECT_EQ(coldPartial.renderHits,0u);
@@ -551,17 +555,18 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
       const auto partial =
           MetalApi::pipelineArchiveSnapshot(device);
       // MTLBinaryArchive stores pipeline functions rather than the whole
-      // blend descriptor. Both selected logical roles share the exact same
+      // blend descriptor. Both selected texture roles share the exact same
       // vertex/fragment function pair, so an archive populated through only
-      // the opaque role is already a strict hit for the alpha role.
+      // the opaque role is already a strict hit for the alpha role. The color
+      // alpha role uses a distinct function pair and remains a strict miss.
       EXPECT_EQ(partial.renderHits,2u);
-      EXPECT_EQ(partial.renderMisses,0u);
-      EXPECT_EQ(partial.renderAdds,0u);
+      EXPECT_EQ(partial.renderMisses,1u);
+      EXPECT_EQ(partial.renderAdds,1u);
       EXPECT_EQ(partial.renderFallbacks,0u);
       EXPECT_EQ(
           MetalApi::runtimeCompilationSnapshot(device).
               renderPsoRequests,
-          2u);
+          4u);
       EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
       }
 

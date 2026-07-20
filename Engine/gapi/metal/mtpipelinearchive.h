@@ -32,7 +32,8 @@ makeMetalPipelineArchiveConfig(
 [[nodiscard]]
 constexpr bool isMetalPipelineArchiveRenderRole(
     MetalBuiltinRenderRole role) noexcept {
-  return role==MetalBuiltinRenderRole::TextureTrianglesOpaque ||
+  return role==MetalBuiltinRenderRole::ColorTrianglesAlpha ||
+         role==MetalBuiltinRenderRole::TextureTrianglesOpaque ||
          role==MetalBuiltinRenderRole::TextureTrianglesAlpha;
   }
 
