@@ -146,4 +146,21 @@ static_assert(!noexcept(Tempest::MetalApi::withActiveRenderEncoder(
     nullptr,
     std::declval<Tempest::MetalRenderEncodeCallback>())));
 
+static_assert(std::is_same_v<
+              Tempest::MetalCommandBufferEncodeCallback,
+              void (*)(void*,MTL::CommandBuffer*)>);
+static_assert(std::is_same_v<
+              decltype(Tempest::MetalApi::withActiveCommandBuffer(
+                  std::declval<const Tempest::Device&>(),
+                  std::declval<Tempest::Encoder<Tempest::CommandBuffer>&>(),
+                  nullptr,
+                  std::declval<
+                      Tempest::MetalCommandBufferEncodeCallback>())),
+              bool>);
+static_assert(!noexcept(Tempest::MetalApi::withActiveCommandBuffer(
+    std::declval<const Tempest::Device&>(),
+    std::declval<Tempest::Encoder<Tempest::CommandBuffer>&>(),
+    nullptr,
+    std::declval<Tempest::MetalCommandBufferEncodeCallback>())));
+
 }

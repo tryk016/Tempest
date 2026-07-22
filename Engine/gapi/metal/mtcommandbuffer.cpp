@@ -78,6 +78,7 @@ void MtCommandBuffer::reset() {
 
   impl = NsPtr<MTL::CommandBuffer>(device.queue->commandBuffer(desc.get()));
   impl->retain();
+  nativeEncodingAttempted = false;
   }
 
 void MtCommandBuffer::beginRendering(const FrameBufferDesc& fbo, size_t fboSize, uint32_t width, uint32_t height) {

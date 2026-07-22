@@ -175,6 +175,38 @@ bool MetalApi::withActiveRenderEncoder(
   return true;
   }
 
+bool MetalApi::withActiveCommandBuffer(
+    const Tempest::Device& device,
+    Tempest::Encoder<Tempest::CommandBuffer>& encoder,
+    void* context,
+    MetalCommandBufferEncodeCallback callback) {
+  auto* nativeDevice  = dynamic_cast<MtDevice*>(device.dev);
+  auto* nativeCommand = dynamic_cast<MtCommandBuffer*>(encoder.impl);
+  if(nativeDevice==nullptr || nativeCommand==nullptr ||
+     &nativeCommand->device!=nativeDevice || context==nullptr ||
+     callback==nullptr || nativeCommand->impl==nullptr ||
+     nativeCommand->nativeEncodingAttempted || nativeCommand->isRecording() ||
+     encoder.state.stage!=Encoder<Tempest::CommandBuffer>::None ||
+     encoder.state.curPipeline!=nullptr || encoder.state.curCompute!=nullptr)
+    return false;
+
+  MTL::CommandBuffer* const commandBuffer = nativeCommand->impl.get();
+  if(commandBuffer==nullptr ||
+     commandBuffer->status()!=MTL::CommandBufferStatusNotEnqueued)
+    return false;
+
+  nativeCommand->nativeEncodingAttempted = true;
+  callback(context,commandBuffer);
+
+  return encoder.impl==nativeCommand &&
+         nativeCommand->impl.get()==commandBuffer &&
+         commandBuffer->status()==MTL::CommandBufferStatusNotEnqueued &&
+         !nativeCommand->isRecording() &&
+         encoder.state.stage==Encoder<Tempest::CommandBuffer>::None &&
+         encoder.state.curPipeline==nullptr &&
+         encoder.state.curCompute==nullptr;
+  }
+
 std::vector<AbstractGraphicsApi::Props> MetalApi::devices() const {
 #if defined(__OSX__)
   auto dev = MTL::CopyAllDevices();

@@ -43,6 +43,48 @@ void throwFromActiveRenderEncoder(void*,
   throw std::runtime_error("active render encoder callback");
   }
 
+struct NativeClearContext final {
+  MTL::Texture* target = nullptr;
+  size_t        encodedPasses = 0;
+};
+
+void observeActiveCommandBuffer(void* context,
+                                MTL::CommandBuffer* commandBuffer) {
+  auto& called = *static_cast<bool*>(context);
+  called = commandBuffer!=nullptr;
+  }
+
+bool nullContextCommandBufferCallbackCalled = false;
+
+void observeNullContextCommandBuffer(void*,MTL::CommandBuffer*) {
+  nullContextCommandBufferCallbackCalled = true;
+  }
+
+void encodeNativeClearPasses(void* context,
+                             MTL::CommandBuffer* commandBuffer) {
+  auto& clear = *static_cast<NativeClearContext*>(context);
+  auto pool = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
+  const std::array<MTL::ClearColor,2> colors = {{
+      MTL::ClearColor::Make(1.0,0.0,0.0,1.0),
+      MTL::ClearColor::Make(0.0,1.0,0.0,1.0),
+  }};
+
+  for(const auto color:colors) {
+    auto pass = NS::TransferPtr(MTL::RenderPassDescriptor::alloc()->init());
+    auto* attachment = pass->colorAttachments()->object(0);
+    attachment->setTexture(clear.target);
+    attachment->setLoadAction(MTL::LoadActionClear);
+    attachment->setStoreAction(MTL::StoreActionStore);
+    attachment->setClearColor(color);
+
+    auto* nativeEncoder = commandBuffer->renderCommandEncoder(pass.get());
+    if(nativeEncoder==nullptr)
+      return;
+    nativeEncoder->endEncoding();
+    ++clear.encodedPasses;
+    }
+  }
+
 MetalBuiltinOfflineManifest testOfflineBuiltinManifest() {
   MetalBuiltinOfflineManifest manifest;
   manifest.metallibPath =
@@ -828,6 +870,68 @@ TEST(MetalApi,ActiveRenderEncoderScope) {
   catch(std::system_error& e) {
     if(e.code()==Tempest::GraphicsErrc::NoDevice)
       Log::d("Skipping Metal active render encoder testcase: ",e.what()); else
+      throw;
+    }
+#endif
+  }
+
+TEST(MetalApi,ActiveCommandBufferScope) {
+#if defined(__OSX__)
+  try {
+    MetalApi api{ApiFlags::Validation};
+    Device device(api);
+    Device foreignDevice(api);
+
+    auto target = device.attachment(TextureFormat::RGBA8,4,4);
+    const auto nativeTarget = MetalApi::borrowTexture(
+        device,textureCast<const Texture2d&>(target));
+    ASSERT_TRUE(nativeTarget);
+
+    auto command = device.commandBuffer();
+    NativeClearContext clear{nativeTarget.get()};
+    {
+      auto encoder = command.startEncoding(device);
+      bool called = false;
+      EXPECT_FALSE(MetalApi::withActiveCommandBuffer(
+          device,encoder,&called,nullptr));
+      nullContextCommandBufferCallbackCalled = false;
+      EXPECT_FALSE(MetalApi::withActiveCommandBuffer(
+          device,encoder,nullptr,observeNullContextCommandBuffer));
+      EXPECT_FALSE(nullContextCommandBufferCallbackCalled);
+      EXPECT_FALSE(MetalApi::withActiveCommandBuffer(
+          foreignDevice,encoder,&called,observeActiveCommandBuffer));
+      EXPECT_FALSE(called);
+
+      EXPECT_TRUE(MetalApi::withActiveCommandBuffer(
+          device,encoder,&clear,encodeNativeClearPasses));
+      EXPECT_EQ(clear.encodedPasses,2u);
+
+      bool secondCallInvoked = false;
+      EXPECT_FALSE(MetalApi::withActiveCommandBuffer(
+          device,encoder,&secondCallInvoked,observeActiveCommandBuffer));
+      EXPECT_FALSE(secondCallInvoked);
+    }
+
+    auto sync = device.submit(command);
+    EXPECT_TRUE(sync.wait(5000));
+
+    auto activeCommand = device.commandBuffer();
+    {
+      auto encoder = activeCommand.startEncoding(device);
+      encoder.setFramebuffer(
+          {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}});
+      bool called = false;
+      EXPECT_FALSE(MetalApi::withActiveCommandBuffer(
+          device,encoder,&called,observeActiveCommandBuffer));
+      EXPECT_FALSE(called);
+    }
+
+    auto activeSync = device.submit(activeCommand);
+    EXPECT_TRUE(activeSync.wait(5000));
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal active command buffer testcase: ",e.what()); else
       throw;
     }
 #endif

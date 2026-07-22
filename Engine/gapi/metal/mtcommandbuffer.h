@@ -126,6 +126,7 @@ class MtCommandBuffer : public AbstractGraphicsApi::CommandBuffer {
 
     MtDevice&                         device;
     NsPtr<MTL::CommandBuffer>         impl;
+    bool                              nativeEncodingAttempted;
 
     NsPtr<MTL::RenderCommandEncoder>  encDraw;
     NsPtr<MTL::ComputeCommandEncoder> encComp;

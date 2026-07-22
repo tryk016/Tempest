@@ -12,6 +12,7 @@ namespace MTL {
 class Device;
 class Buffer;
 class Texture;
+class CommandBuffer;
 class RenderCommandEncoder;
 }
 
@@ -67,6 +68,17 @@ using BorrowedMetalTexture = BorrowedMetalHandle<MTL::Texture>;
 // The callback must restore or balance every dynamic or debug encoder state
 // that it changes, such as viewport, scissor, winding, bias, or debug groups.
 using MetalRenderEncodeCallback = void (*)(void*,MTL::RenderCommandEncoder*);
+// Invoked synchronously for a virgin, not-yet-enqueued Tempest command buffer.
+// The command buffer is borrowed only for the duration of the callback and
+// must not be retained, released, enqueued, committed, waited on, or used to
+// install completion handlers. The callback must end every native encoder it
+// creates before returning and must not re-enter Tempest through `encoder`.
+// Context and callback must both be non-null. Only one callback attempt is
+// allowed per native command buffer; an exception or invalid return state also
+// consumes that command buffer's scope.
+// The bridge returns false without invoking the callback when the scope is not
+// eligible, and also after invocation if a verifiable invariant was violated.
+using MetalCommandBufferEncodeCallback = void (*)(void*,MTL::CommandBuffer*);
 
 struct MetalRuntimeCompilationSnapshot final {
   bool     available             = false;
@@ -242,6 +254,12 @@ class MetalApi : public AbstractGraphicsApi {
         Tempest::Encoder<Tempest::CommandBuffer>& encoder,
         void* context,
         MetalRenderEncodeCallback callback);
+    [[nodiscard]]
+    static bool withActiveCommandBuffer(
+        const Tempest::Device& device,
+        Tempest::Encoder<Tempest::CommandBuffer>& encoder,
+        void* context,
+        MetalCommandBufferEncodeCallback callback);
 
   protected:
     Device*        createDevice(std::string_view gpuName) override;
