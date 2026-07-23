@@ -322,3 +322,20 @@ MetalBuiltinRenderRole Tempest::Detail::classifyMetalBuiltinRenderRole(
     }
   return MetalBuiltinRenderRole::None;
   }
+
+bool Tempest::Detail::isMetalInventoryPipelineArchiveEligible(
+    MetalInventoryOfflineRole vertex,
+    MetalInventoryOfflineRole fragment,
+    Topology topology,
+    const RenderState& renderState) noexcept {
+  return vertex==MetalInventoryOfflineRole::Vertex &&
+         fragment==MetalInventoryOfflineRole::Fragment &&
+         topology==Topology::Triangles &&
+         renderState.cullFaceMode()==RenderState::CullMode::Front &&
+         renderState.zTestMode()==RenderState::ZTestMode::LEqual &&
+         renderState.isZWriteEnabled() &&
+         !renderState.isRasterDiscardEnabled() &&
+         renderState.blendSource()==RenderState::BlendMode::One &&
+         renderState.blendDest()==RenderState::BlendMode::Zero &&
+         renderState.blendOperation()==RenderState::BlendOp::Add;
+  }

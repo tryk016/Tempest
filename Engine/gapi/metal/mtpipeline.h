@@ -58,6 +58,7 @@ class MtPipeline : public AbstractGraphicsApi::Pipeline {
     Tempest::RenderState                 rs;
     MetalBuiltinRenderRole               builtinRenderRole =
         MetalBuiltinRenderRole::None;
+    bool                                 inventoryArchiveEligible = false;
 
     NsPtr<MTL::VertexDescriptor>         vdesc;
     NsPtr<MTL::RenderPipelineDescriptor> pdesc;

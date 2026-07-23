@@ -367,6 +367,7 @@ class MtDevice : public AbstractGraphicsApi::Device {
     MTL::RenderPipelineState* newRenderPipelineState(
         MTL::RenderPipelineDescriptor& descriptor,
         MetalBuiltinRenderRole role,
+        bool inventoryArchiveEligible,
         NS::Error** error);
     MetalPipelineArchiveSnapshot pipelineArchiveSnapshot() const noexcept;
     bool flushPipelineArchive() noexcept;

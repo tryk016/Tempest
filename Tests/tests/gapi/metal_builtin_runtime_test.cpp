@@ -21,6 +21,7 @@ using Tempest::Detail::classifyMetalBuiltinSource;
 using Tempest::Detail::classifyMetalInventoryOfflineSource;
 using Tempest::Detail::configureMetalBuiltinOfflineReflection;
 using Tempest::Detail::configureMetalInventoryOfflineReflection;
+using Tempest::Detail::isMetalInventoryPipelineArchiveEligible;
 using Tempest::Detail::makeMetalBuiltinOfflineConfig;
 using Tempest::Detail::makeMetalPipelineArchiveConfig;
 
@@ -48,6 +49,18 @@ RenderState additiveBlend() {
   RenderState state;
   state.setBlendSource(RenderState::BlendMode::One);
   state.setBlendDest(RenderState::BlendMode::One);
+  return state;
+  }
+
+RenderState productionInventoryState() {
+  RenderState state;
+  state.setCullFaceMode(RenderState::CullMode::Front);
+  state.setZTestMode(RenderState::ZTestMode::LEqual);
+  state.setZWriteEnabled(true);
+  state.setRasterDiscardEnabled(false);
+  state.setBlendSource(RenderState::BlendMode::One);
+  state.setBlendDest(RenderState::BlendMode::Zero);
+  state.setBlendOp(RenderState::BlendOp::Add);
   return state;
   }
 
@@ -226,6 +239,64 @@ TEST(MetalPipelineArchive,HardCodesOnlySelectedRenderRoles) {
     }
   EXPECT_FALSE(Tempest::Detail::isMetalPipelineArchiveRenderRole(
       MetalBuiltinRenderRole::None));
+  }
+
+TEST(MetalPipelineArchive,RecognizesOnlyProductionInventoryPipeline) {
+  const auto eligible = [](const RenderState& state) {
+    return isMetalInventoryPipelineArchiveEligible(
+        Detail::MetalInventoryOfflineRole::Vertex,
+        Detail::MetalInventoryOfflineRole::Fragment,
+        Topology::Triangles,state);
+    };
+
+  const RenderState production = productionInventoryState();
+  EXPECT_TRUE(eligible(production));
+  EXPECT_FALSE(isMetalInventoryPipelineArchiveEligible(
+      Detail::MetalInventoryOfflineRole::None,
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Topology::Triangles,production));
+  EXPECT_FALSE(isMetalInventoryPipelineArchiveEligible(
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Topology::Triangles,production));
+  EXPECT_FALSE(isMetalInventoryPipelineArchiveEligible(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Detail::MetalInventoryOfflineRole::None,
+      Topology::Triangles,production));
+  EXPECT_FALSE(isMetalInventoryPipelineArchiveEligible(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Topology::Triangles,production));
+  EXPECT_FALSE(isMetalInventoryPipelineArchiveEligible(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Topology::Lines,production));
+  EXPECT_FALSE(isMetalInventoryPipelineArchiveEligible(
+      Detail::MetalInventoryOfflineRole::Vertex,
+      Detail::MetalInventoryOfflineRole::Fragment,
+      Topology::Points,production));
+
+  auto mutated = production;
+  mutated.setCullFaceMode(RenderState::CullMode::Back);
+  EXPECT_FALSE(eligible(mutated));
+  mutated = production;
+  mutated.setZTestMode(RenderState::ZTestMode::Less);
+  EXPECT_FALSE(eligible(mutated));
+  mutated = production;
+  mutated.setZWriteEnabled(false);
+  EXPECT_FALSE(eligible(mutated));
+  mutated = production;
+  mutated.setRasterDiscardEnabled(true);
+  EXPECT_FALSE(eligible(mutated));
+  mutated = production;
+  mutated.setBlendSource(RenderState::BlendMode::SrcAlpha);
+  EXPECT_FALSE(eligible(mutated));
+  mutated = production;
+  mutated.setBlendDest(RenderState::BlendMode::One);
+  EXPECT_FALSE(eligible(mutated));
+  mutated = production;
+  mutated.setBlendOp(RenderState::BlendOp::Subtract);
+  EXPECT_FALSE(eligible(mutated));
   }
 
 TEST(MetalBuiltinRuntime,RejectsInvalidOfflineManifest) {

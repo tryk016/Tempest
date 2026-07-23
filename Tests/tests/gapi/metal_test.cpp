@@ -172,6 +172,33 @@ void instantiateUnarchivedBuiltinPipeline(Device& device) {
   encoder.setPipeline(texture.brushA);
   }
 
+void instantiateArchivedInventoryPipeline(
+    Device& device, const OfflineInventorySources& sources) {
+  auto vert = device.shader(
+      sources.vertex.data(),sources.vertex.size()*sizeof(uint32_t));
+  auto frag = device.shader(
+      sources.fragment.data(),sources.fragment.size()*sizeof(uint32_t));
+
+  RenderState state;
+  state.setCullFaceMode(RenderState::CullMode::Front);
+  state.setZTestMode(RenderState::ZTestMode::LEqual);
+  state.setZWriteEnabled(true);
+  state.setRasterDiscardEnabled(false);
+  state.setBlendSource(RenderState::BlendMode::One);
+  state.setBlendDest(RenderState::BlendMode::Zero);
+  state.setBlendOp(RenderState::BlendOp::Add);
+  auto pipeline = device.pipeline(Topology::Triangles,state,vert,frag);
+
+  auto target = device.attachment(TextureFormat::RGBA8,4,4);
+  auto depth  = device.zbuffer(TextureFormat::Depth16,4,4);
+  auto command = device.commandBuffer();
+  auto encoder = command.startEncoding(device);
+  encoder.setFramebuffer(
+      {{target,Vec4(0.f,0.f,0.f,1.f),Tempest::Preserve}},
+      {depth,1.f,Tempest::Preserve});
+  encoder.setPipeline(pipeline);
+  }
+
 }
 #endif
 
@@ -641,6 +668,80 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
       Log::d("Skipping Metal binary archive testcase: ",e.what()); else
       throw;
     }
+#endif
+  }
+
+TEST(MetalApi,OfflineInventoryPipelineArchiveColdWarm) {
+#if defined(__OSX__)
+  try {
+    const std::string archivePath =
+        pipelineArchiveTestPath("-inventory.bin");
+    std::error_code cleanupError;
+    std::filesystem::remove(archivePath,cleanupError);
+
+    const OfflineInventorySources sources;
+    const auto manifest = testOfflineInventoryManifest(sources);
+    MetalPipelineArchiveConfig archiveConfig;
+    archiveConfig.archivePath = archivePath.c_str();
+
+    {
+      MetalApi api{ApiFlags::Validation,manifest,archiveConfig};
+      Device device(api);
+      instantiateArchivedInventoryPipeline(device,sources);
+
+      const auto runtime =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(runtime.sourceLibraryRequests,0u);
+      EXPECT_EQ(runtime.computePsoRequests,0u);
+      EXPECT_EQ(runtime.renderPsoRequests,1u);
+
+      const auto cold =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(cold.renderHits,0u);
+      EXPECT_EQ(cold.renderMisses,1u);
+      EXPECT_EQ(cold.renderAdds,1u);
+      EXPECT_EQ(cold.renderFallbacks,0u);
+      EXPECT_NE(cold.flags&
+                    MetalPipelineArchiveSnapshot::Dirty,0u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+      EXPECT_TRUE(std::filesystem::is_regular_file(archivePath));
+      EXPECT_GT(std::filesystem::file_size(archivePath),0u);
+    }
+
+    {
+      MetalApi api{ApiFlags::Validation,manifest,archiveConfig};
+      Device device(api);
+      const auto initial =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_NE(initial.flags&
+                    MetalPipelineArchiveSnapshot::LoadedFromDisk,0u);
+
+      instantiateArchivedInventoryPipeline(device,sources);
+      const auto runtime =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(runtime.sourceLibraryRequests,0u);
+      EXPECT_EQ(runtime.computePsoRequests,0u);
+      EXPECT_EQ(runtime.renderPsoRequests,1u);
+
+      const auto warm =
+          MetalApi::pipelineArchiveSnapshot(device);
+      EXPECT_EQ(warm.renderHits,1u);
+      EXPECT_EQ(warm.renderMisses,0u);
+      EXPECT_EQ(warm.renderAdds,0u);
+      EXPECT_EQ(warm.renderFallbacks,0u);
+      EXPECT_EQ(warm.flags&
+                    MetalPipelineArchiveSnapshot::Dirty,0u);
+      EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
+    }
+
+    std::filesystem::remove(archivePath,cleanupError);
+  }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping Metal inventory binary archive testcase: ",e.what());
+    else
+      throw;
+  }
 #endif
   }
 

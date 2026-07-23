@@ -261,11 +261,13 @@ MTL::RenderPipelineState* MtPipelineArchive::newRenderPipelineState(
     MtDevice& device,
     MTL::RenderPipelineDescriptor& descriptor,
     MetalBuiltinRenderRole role,
+    bool inventoryArchiveEligible,
     NS::Error** error) {
   if(error!=nullptr)
     *error = nullptr;
 
-  if(!isMetalPipelineArchiveRenderRole(role) ||
+  if((!isMetalPipelineArchiveRenderRole(role) &&
+      !inventoryArchiveEligible) ||
      impl->config==nullptr) {
     descriptor.setBinaryArchives(nullptr);
     return impl->create(

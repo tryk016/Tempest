@@ -78,5 +78,12 @@ MetalBuiltinRenderRole classifyMetalBuiltinRenderRole(
     Topology topology,
     const RenderState& renderState) noexcept;
 
+[[nodiscard]]
+bool isMetalInventoryPipelineArchiveEligible(
+    MetalInventoryOfflineRole vertex,
+    MetalInventoryOfflineRole fragment,
+    Topology topology,
+    const RenderState& renderState) noexcept;
+
 }
 }

@@ -100,9 +100,10 @@ MtDevice::~MtDevice() {
 MTL::RenderPipelineState* MtDevice::newRenderPipelineState(
     MTL::RenderPipelineDescriptor& descriptor,
     MetalBuiltinRenderRole role,
+    bool inventoryArchiveEligible,
     NS::Error** error) {
   return pipelineArchiveImpl->newRenderPipelineState(
-      *this,descriptor,role,error);
+      *this,descriptor,role,inventoryArchiveEligible,error);
   }
 
 MetalPipelineArchiveSnapshot

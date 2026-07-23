@@ -29,6 +29,9 @@ MtPipeline::MtPipeline(MtDevice &d, Topology tp, const RenderState &rs,
   if(vertex!=nullptr && fragment!=nullptr) {
     builtinRenderRole = classifyMetalBuiltinRenderRole(
         vertex->builtinSourceRole,fragment->builtinSourceRole,tp,rs);
+    inventoryArchiveEligible =
+        isMetalInventoryPipelineArchiveEligible(
+            vertex->inventorySourceRole,fragment->inventorySourceRole,tp,rs);
     }
 
   cullMode = nativeFormat(rs.cullFaceMode());
@@ -132,7 +135,7 @@ MTL::RenderPipelineState& MtPipeline::inst(const MtFboLayout& lay, size_t stride
     device.noteBuiltinRenderPsoRequest(builtinRenderRole);
     ix.pso = NsPtr<MTL::RenderPipelineState>(
         device.newRenderPipelineState(
-            *pdesc,builtinRenderRole,&error));
+            *pdesc,builtinRenderRole,inventoryArchiveEligible,&error));
     mtAssert(ix.pso.get(),error);
     }
 

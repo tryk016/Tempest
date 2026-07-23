@@ -52,6 +52,7 @@ class MtPipelineArchive final {
         MtDevice& device,
         MTL::RenderPipelineDescriptor& descriptor,
         MetalBuiltinRenderRole role,
+        bool inventoryArchiveEligible,
         NS::Error** error);
 
     [[nodiscard]]
