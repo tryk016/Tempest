@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND
+   NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0 CACHE STRING
+      "Minimum Apple platform deployment target")
+endif()
+
 project(Tempest)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -8,7 +14,6 @@ option(TEMPEST_BUILD_SHARED "Build shared Tempest." ON)
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
-set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0)
 
 if(MSVC)
   option(TEMPEST_BUILD_DIRECTX12   "Build directx12 support" ON )
@@ -302,7 +307,6 @@ file(GLOB_RECURSE SOURCES
   )
 
 if(APPLE OR IOS)
-  set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0)
   enable_language(OBJCXX)
   file(GLOB_RECURSE ObjCSOURCES
     "*.mm"
