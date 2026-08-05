@@ -800,7 +800,7 @@ void MtCommandBuffer::copy(AbstractGraphicsApi::Buffer& dest, size_t offset,
   encBlit->copyFromTexture(s.impl.get(), 0,mip,
                            MTL::Origin(0,0,0),MTL::Size(width,height,1),
                            d.impl.get(),
-                           offset, bpp*width,bpp*width*height);
+                           offset, bpp*width,0);
   }
 
 #if defined(TEMPEST_METALFX_SPATIAL)
