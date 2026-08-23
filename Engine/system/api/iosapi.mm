@@ -286,20 +286,26 @@ extern "C" void tempestIosSetPreferredFrameRate(int fps) {
   }
 @end
 
-@interface AppDelegate : NSObject <UIApplicationDelegate> {
-  }
-@end
-
 static bool isApplicationActive = false;
 
-@implementation AppDelegate
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-  (void)application;
-  (void)launchOptions;
+@interface TempestSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@property(nonatomic,strong) TempestWindow* window;
+@end
 
-  CGRect frame = [ [ UIScreen mainScreen ] bounds ];
-  TempestWindow  * window = [ [ TempestWindow alloc ] initWithFrame: frame];
-  window.contentScaleFactor = [UIScreen mainScreen].scale;
+@implementation TempestSceneDelegate
+- (void)scene:(UIScene*)scene
+    willConnectToSession:(UISceneSession*)session
+    options:(UISceneConnectionOptions*)connectionOptions {
+  (void)session;
+  (void)connectionOptions;
+  if(![scene isKindOfClass:UIWindowScene.class])
+    return;
+
+  UIWindowScene* windowScene = static_cast<UIWindowScene*>(scene);
+  TempestWindow* window = [[TempestWindow alloc]
+      initWithWindowScene:windowScene];
+  window.frame = windowScene.coordinateSpace.bounds;
+  window.contentScaleFactor = windowScene.screen.scale;
   window.rootViewController = [ViewController new];
   window.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   window.backgroundColor = [ UIColor blackColor ];
@@ -309,37 +315,62 @@ static bool isApplicationActive = false;
   window->hasPendingFrame.store(false);
   window->curentEvent = Event::Type::NoEvent;
   
+  self.window = window;
   mainWindow = window;
-  [ window makeKeyAndVisible ]; // possible switch here
-  return YES;
+  [window makeKeyAndVisible];
   }
 
-- (UIInterfaceOrientationMask)application:(UIApplication *)application
-  supportedInterfaceOrientationsForWindow:(UIWindow *)window {
-  return UIInterfaceOrientationMaskLandscape;
-  }
-
-- (void)applicationWillResignActive:(UIApplication *)application {
-  (void)application;
+- (void)sceneWillResignActive:(UIScene*)scene {
+  (void)scene;
   isApplicationActive = false;
   queueAppStateEvent(AppStateEvent::State::WillResignActive, true);
   }
 
-- (void)applicationDidEnterBackground:(UIApplication *)application {
-  (void)application;
+- (void)sceneDidEnterBackground:(UIScene*)scene {
+  (void)scene;
   queueAppStateEvent(AppStateEvent::State::DidEnterBackground, false);
   }
 
-- (void)applicationWillEnterForeground:(UIApplication *)application {
-  (void)application;
+- (void)sceneWillEnterForeground:(UIScene*)scene {
+  (void)scene;
   queueAppStateEvent(AppStateEvent::State::WillEnterForeground, false);
   }
 
-- (void)applicationDidBecomeActive:(UIApplication *)application  {
-  (void)application;
-  application.idleTimerDisabled = YES;
+- (void)sceneDidBecomeActive:(UIScene*)scene {
+  (void)scene;
+  UIApplication.sharedApplication.idleTimerDisabled = YES;
   isApplicationActive = true;
   queueAppStateEvent(AppStateEvent::State::DidBecomeActive, true);
+  }
+@end
+
+@interface AppDelegate : NSObject <UIApplicationDelegate>
+@end
+
+@implementation AppDelegate
+- (BOOL)application:(UIApplication*)application
+    didFinishLaunchingWithOptions:(NSDictionary*)launchOptions {
+  (void)application;
+  (void)launchOptions;
+  return YES;
+  }
+
+- (UISceneConfiguration*)application:(UIApplication*)application
+    configurationForConnectingSceneSession:(UISceneSession*)session
+    options:(UISceneConnectionOptions*)connectionOptions {
+  (void)application;
+  (void)connectionOptions;
+  UISceneConfiguration* configuration = [[UISceneConfiguration alloc]
+      initWithName:@"Default Configuration" sessionRole:session.role];
+  configuration.delegateClass = TempestSceneDelegate.class;
+  return configuration;
+  }
+
+- (UIInterfaceOrientationMask)application:(UIApplication*)application
+    supportedInterfaceOrientationsForWindow:(UIWindow*)window {
+  (void)application;
+  (void)window;
+  return UIInterfaceOrientationMaskLandscape;
   }
 
 - (void)applicationWillTerminate:(UIApplication *)application {
