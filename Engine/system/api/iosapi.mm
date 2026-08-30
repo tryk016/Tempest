@@ -279,11 +279,6 @@ static bool isApplicationActive = false;
   return YES;
   }
 
-- (UIInterfaceOrientationMask)application:(UIApplication *)application
-  supportedInterfaceOrientationsForWindow:(UIWindow *)window {
-  return UIInterfaceOrientationMaskAll;
-  }
-
 - (void)applicationWillResignActive:(UIApplication *)application {
   (void)application;
   isApplicationActive = false;
