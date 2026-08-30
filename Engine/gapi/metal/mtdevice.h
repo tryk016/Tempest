@@ -4,6 +4,7 @@
 #include <Tempest/AccelerationStructure>
 #include <Tempest/RenderState>
 #include <Tempest/Except>
+#include <Tempest/MetalApi>
 
 #include <Metal/Metal.hpp>
 #include <Foundation/Foundation.hpp>
@@ -18,6 +19,8 @@ class MTLDevice;
 
 namespace Tempest {
 namespace Detail {
+
+class MtPrecompiledLibraries;
 
 inline MTL::PixelFormat nativeFormat(TextureFormat frm) {
   switch(frm) {
@@ -243,7 +246,8 @@ inline MTL::RenderStages nativeFormat(ShaderReflection::Stage st) {
 
 class MtDevice : public AbstractGraphicsApi::Device {
   public:
-    MtDevice(std::string_view name, bool validation);
+    MtDevice(std::string_view name, bool validation,
+             std::shared_ptr<const MetalApi::Options> precompiledOptions = {});
     ~MtDevice();
 
     static const uint32_t MaxFences = 32;
@@ -285,6 +289,8 @@ class MtDevice : public AbstractGraphicsApi::Device {
 
     Props                      prop;
     MtSamplerCache             samplers;
+    std::shared_ptr<const MetalApi::Options> precompiledOptions;
+    std::unique_ptr<MtPrecompiledLibraries> precompiledLibraries;
     bool                       validation = false;
 
     static void deductProps(AbstractGraphicsApi::Props& prop, MTL::Device& dev);
