@@ -278,6 +278,9 @@ AbstractGraphicsApi::PBuffer MetalApi::createBuffer(AbstractGraphicsApi::Device 
       opt |= MTL::ResourceStorageModePrivate;
       break;
     case BufferHeap::Upload: {
+#if defined(__IOS__)
+      opt |= MTL::ResourceStorageModeShared;
+#else
       if(dx.impl->hasUnifiedMemory()) {
         // Shared resources are only available on systems with integrated graphics,
         // such as Apple silicon and integrated GPUs on Intel-based Mac computers
@@ -285,11 +288,16 @@ AbstractGraphicsApi::PBuffer MetalApi::createBuffer(AbstractGraphicsApi::Device 
         } else {
         opt |= MTL::ResourceStorageModeManaged;
         }
+#endif
       opt |= MTL::ResourceCPUCacheModeWriteCombined;
       break;
       }
     case BufferHeap::Readback:
+#if defined(__IOS__)
+      opt |= MTL::ResourceStorageModeShared;
+#else
       opt |= MTL::ResourceStorageModeManaged;
+#endif
       opt |= MTL::ResourceCPUCacheModeDefaultCache;
       break;
     }

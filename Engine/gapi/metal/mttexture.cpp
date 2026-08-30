@@ -31,6 +31,15 @@ static uint32_t alignedSize(uint32_t w, uint32_t h, uint32_t a) {
   return ((w*sizeof(uint32_t)+a-1) & ~(a-1)) * (h);
   }
 
+static MTL::StorageMode cpuVisibleStorageMode(const MtDevice& dev) {
+#if defined(__IOS__)
+  (void)dev;
+  return MTL::StorageModeShared;
+#else
+  return dev.impl->hasUnifiedMemory() ? MTL::StorageModeShared : MTL::StorageModeManaged;
+#endif
+  }
+
 MtTexture::MtTexture(MtDevice& d, const uint32_t w, const uint32_t h, const uint32_t depth,
                      uint32_t mipCnt, TextureFormat frm, bool storageTex)
   :dev(d), mipCnt(mipCnt) {
@@ -45,7 +54,7 @@ MtTexture::MtTexture(MtDevice& d, const uint32_t w, const uint32_t h, const uint
 MtTexture::MtTexture(MtDevice& dev, const Pixmap& pm, uint32_t mipCnt, TextureFormat frm)
   :dev(dev), mipCnt(mipCnt) {
   const uint32_t         smip  = (isCompressedFormat(frm) ? mipCnt : 1);
-  const MTL::StorageMode smode = dev.impl->hasUnifiedMemory() ? MTL::StorageModeShared : MTL::StorageModeManaged;
+  const MTL::StorageMode smode = cpuVisibleStorageMode(dev);
 
   NsPtr<MTL::Texture> stage = alloc(frm,pm.w(),pm.h(),0,smip,smode,MTL::TextureUsageShaderRead);
   impl = alloc(frm,pm.w(),pm.h(),0,mipCnt,MTL::StorageModePrivate,MTL::TextureUsageShaderRead);
@@ -152,7 +161,7 @@ void MtTexture::readPixels(Pixmap& out, TextureFormat frm, const uint32_t w, con
     throw std::runtime_error("not implemented");
   out = Pixmap(w,h,frm);
 
-  const MTL::StorageMode opt = dev.impl->hasUnifiedMemory() ? MTL::StorageModeShared : MTL::StorageModeManaged;
+  const MTL::StorageMode opt = cpuVisibleStorageMode(dev);
 
   NsPtr<MTL::Texture> stage = alloc(frm,w,h,0,1,opt,MTL::TextureUsageShaderRead);
   auto pool = NsPtr<NS::AutoreleasePool>::init();
