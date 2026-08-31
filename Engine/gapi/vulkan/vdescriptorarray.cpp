@@ -9,15 +9,6 @@
 using namespace Tempest;
 using namespace Tempest::Detail;
 
-static VkImageLayout toWriteLayout(VTexture& tex) {
-  if(nativeIsDepthFormat(tex.format))
-    return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-  if(tex.isStorageImage)
-    return VK_IMAGE_LAYOUT_GENERAL;
-  return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  }
-
-
 VDescriptorArray::VDescriptorArray(VDevice &dev, AbstractGraphicsApi::Texture **tex, size_t cnt, uint32_t mipLevel, const Sampler &smp)
   : dev(dev), cnt(cnt) {
   // Roundup a little, to avoid spamming of layouts
@@ -49,7 +40,7 @@ VDescriptorArray::VDescriptorArray(VDevice &dev, AbstractGraphicsApi::Buffer **b
   }
 
 VDescriptorArray::~VDescriptorArray() {
-  dev.bindless.notifyDestroy(this);
+  dev.descPool.notifyDestroy(this);
   if(pool!=VK_NULL_HANDLE)
     vkDestroyDescriptorPool(dev.device.impl, pool, nullptr);
   }
@@ -89,9 +80,9 @@ void VDescriptorArray::populate(VDevice &dev, AbstractGraphicsApi::Texture **t, 
   SmallArray<VkDescriptorImageInfo,16> imageInfo(cnt);
   for(size_t i=0; i<cnt; ++i) {
     VTexture* tex = reinterpret_cast<VTexture*>(t[i]);
-    imageInfo[i].imageLayout = tex!=nullptr ? toWriteLayout(*tex) : VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo[i].imageView   = tex!=nullptr ? tex->view(ComponentMapping(), mipLevel, is3DImage) : VK_NULL_HANDLE;
-    imageInfo[i].sampler     = smp!=nullptr ? dev.allocator.updateSampler(*smp) : VK_NULL_HANDLE;
+    imageInfo[i].imageLayout = tex!=nullptr ? tex->defaultLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo[i].imageView   = tex!=nullptr ? tex->view(ComponentMapping(), mipLevel, is3DImage, false) : VK_NULL_HANDLE;
+    imageInfo[i].sampler     = smp!=nullptr ? dev.samplers.get(*smp) : VK_NULL_HANDLE;
     // TODO: support mutable textures in bindless
     assert(tex==nullptr || tex->nonUniqId==0);
     if(tex!=nullptr)
@@ -139,6 +130,62 @@ void VDescriptorArray::populate(VDevice &dev, AbstractGraphicsApi::Buffer **b, s
   descriptorWrite.pBufferInfo     = bufInfo.get();
 
   vkUpdateDescriptorSets(dev.device.impl, 1, &descriptorWrite, 0, nullptr);
+  }
+
+
+VDescriptorHeapArray::VDescriptorHeapArray(VDevice& dev, AbstractGraphicsApi::Texture** tex, size_t cnt, uint32_t mipLevel)
+  : VDescriptorHeapArray(dev, tex, cnt, mipLevel, nullptr){
+  }
+
+VDescriptorHeapArray::VDescriptorHeapArray(VDevice& dev, AbstractGraphicsApi::Texture** tex, size_t cnt, uint32_t mipLevel, const Sampler* sampler)
+  : dev(dev), cnt(uint32_t(cnt)) {
+  //NOTE: no bindless storage image
+  try {
+    auto alloc = dev.descAlloc.alloc(tex, cnt, mipLevel);
+    dPtrR = alloc.ptr;
+
+    if(sampler!=nullptr) {
+      dPtrS = dev.samplers.getH(*sampler);
+      }
+
+    nonUniqId = NonUniqResId::I_None;
+    for(size_t i=0; i<cnt; ++i) {
+      auto* bx = reinterpret_cast<VTexture*>(tex[i]);
+      if(bx!=nullptr)
+        nonUniqId |= bx->nonUniqId;
+      }
+    }
+  catch(...) {
+    clear();
+    throw;
+    }
+  }
+
+VDescriptorHeapArray::VDescriptorHeapArray(VDevice& dev, AbstractGraphicsApi::Buffer** buf, size_t cnt)
+  : dev(dev), cnt(uint32_t(cnt)) {
+  try {
+    auto alloc = dev.descAlloc.alloc(buf, cnt);
+    dPtrR = alloc.ptr;
+
+    nonUniqId = NonUniqResId::I_None;
+    for(size_t i=0; i<cnt; ++i) {
+      auto* bx = reinterpret_cast<VBuffer*>(buf[i]);
+      if(bx!=nullptr)
+        nonUniqId |= bx->nonUniqId;
+      }
+    }
+  catch(...) {
+    clear();
+    throw;
+    }
+  }
+
+VDescriptorHeapArray::~VDescriptorHeapArray() {
+  clear();
+  }
+
+void VDescriptorHeapArray::clear() {
+  dev.descAlloc.free(dPtrR, uint32_t(cnt));
   }
 
 #endif

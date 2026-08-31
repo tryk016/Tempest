@@ -1,0 +1,116 @@
+name: Build
+
+on: [push, pull_request]
+
+env:
+  VK_SDK: '1.4.357.0'
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows (MSVC 2022)
+            os: windows-latest
+            generator: "Ninja"
+            use_msvc: true
+            use_mingw: false
+
+          - name: Windows (MinGW)
+            os: windows-latest
+            generator: "Ninja"
+            use_msvc: false
+            use_mingw: true
+
+          - name: Ubuntu (Linux)
+            os: ubuntu-latest
+            generator: "Ninja"
+            use_msvc: false
+            use_mingw: false
+
+          - name: macOS
+            os: macos-15
+            generator: "Ninja"
+            use_msvc: false
+            use_mingw: false
+
+    steps:
+      # Checkout
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # System dependencies for Linux
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get --yes install libasound2-dev libx11-dev libxcursor-dev ninja-build gdb
+
+      # System dependencies for macOS
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      # Setup Vulkan SDK
+      - uses: ./.github/actions/setup-vulkan
+        if: runner.os != 'macOS'
+        with:
+          os: ${{ runner.os }}
+          vk-sdk: ${{ env.VK_SDK }}
+
+      # Setup glslang
+      - uses: ./.github/actions/setup-glslang
+        with:
+          os: ${{ runner.os }}
+
+      # Set up MSVC environment variables
+      - name: Set up MSVC Developer Command Prompt
+        if: matrix.use_msvc
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # Set up MinGW Toolchain on Windows if needed
+      - name: Set up MinGW
+        if: matrix.use_mingw
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      # Configure and Build Project
+      - name: Configure and Build
+        run: |
+          cmake --version
+          ninja --version
+
+          cmake -HTests/tests -Bbuild -G "${{ matrix.generator }}" -DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo -DCMAKE_SH=CMAKE_SH-NOTFOUND
+          cmake --build build --target TempestTests
+
+      # Run Test Suite
+      - name: Run Tests
+        shell: pwsh
+        run: |
+          cd build/testsuite
+
+          if ("${{ matrix.use_msvc }}" -eq "true") {
+            ./TempestTests.exe
+            }
+          elseif ("${{ matrix.use_mingw }}" -eq "true") {
+            gdb -batch -ex "run" -ex "bt" -ex "quit `$_exitcode" --args ./TempestTests.exe
+            }
+          elseif ("${{ runner.os }}" -eq "Linux") {
+            gdb -batch -ex "run" -ex "bt" -ex "quit `$_exitcode" ./TempestTests
+            }
+          elseif ("${{ runner.os }}" -eq "macOS") {
+            lldb -o run -o bt -o quit -- ./TempestTests
+            }

@@ -1,41 +1,47 @@
 #pragma once
 
 #include <Tempest/Texture2d>
-#include <mutex>
 #include <vector>
 
-#include "vulkan_sdk.h"
 #include "utility/spinlock.h"
+
+#include "vulkan_sdk.h"
 
 namespace Tempest {
 namespace Detail {
 
 class VDevice;
+class VBuffer;
+class VTexture;
 
 class VSamplerCache final {
   public:
     VSamplerCache();
     ~VSamplerCache();
 
+    static VkSamplerCreateInfo createInfo(const VDevice& dev, const Sampler& s);
+
     VkSampler get(const Sampler& s);
+    VkSampler get(const Sampler& s, const VTexture* tex);
+    uint32_t  getH(const Sampler& s);
+    uint32_t  getH(const Sampler& s, const VTexture* tex);
     void      setDevice(VDevice &dev);
 
   private:
     struct Entry {
       Sampler   smp;
-      VkSampler sampler=VK_NULL_HANDLE;
+      VkSampler sampler = VK_NULL_HANDLE;
+      uint64_t  value   = 0;
       };
 
-    SpinLock           sync;
+    uint64_t  implGet(const Sampler& s);
+    VkSampler alloc(const Sampler& s);
+
+    mutable SpinLock   sync;
     std::vector<Entry> chunks;
 
-    VkDevice           device        = nullptr;
-    VkSampler          smpDefault    = VK_NULL_HANDLE;
-
-    bool               anisotropy    = false;
-    float              maxAnisotropy = 1.f;
-
-    VkSampler          alloc(const Sampler& s);
+    VDevice*           device     = nullptr;
+    uint64_t           smpDefault = VK_NULL_HANDLE;
   };
 
 }}
