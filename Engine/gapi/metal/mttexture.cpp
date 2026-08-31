@@ -31,7 +31,7 @@ static uint32_t alignedSize(uint32_t w, uint32_t h, uint32_t a) {
   return ((w*sizeof(uint32_t)+a-1) & ~(a-1)) * (h);
   }
 
-static MTL::StorageMode cpuVisibleStorageMode(const MtDevice& dev) {
+static MTL::StorageMode cpuVisibleStorageMode(MtDevice& dev) {
 #if defined(__IOS__)
   (void)dev;
   return MTL::StorageModeShared;
