@@ -14,8 +14,10 @@ TextModel::CommandInsert::CommandInsert(std::string_view txtIn, TextModel::Curso
   : where(where) {
   size_t l = txtIn.size();
   if(l<=2) {
-    txtShort[0] = txtIn[0];
-    txtShort[1] = txtIn[1];
+    if(l>0)
+      txtShort[0] = txtIn[0];
+    if(l>1)
+      txtShort[1] = txtIn[1];
     } else {
     txt = txtIn;
     }
@@ -42,8 +44,10 @@ TextModel::CommandReplace::CommandReplace(std::string_view txtIn, TextModel::Cur
     std::swap(begin,end);
   size_t l = txtIn.size();
   if(l<=2) {
-    txtShort[0] = txtIn[0];
-    txtShort[1] = txtIn[1];
+    if(l>0)
+      txtShort[0] = txtIn[0];
+    if(l>1)
+      txtShort[1] = txtIn[1];
     } else {
     txt = txtIn;
     }
@@ -93,13 +97,17 @@ void TextModel::CommandErase::undo(TextModel& subj) {
 
 TextModel::TextModel(std::string_view str)
   :txt(str.size() + 1){
-  std::memcpy(txt.data(), str.data(), txt.size());
+  if(!str.empty())
+    std::memcpy(txt.data(), str.data(), str.size());
+  txt.back() = '\0';
   buildIndex();
   }
 
 void TextModel::setText(std::string_view str) {
   txt.resize(str.size() + 1);
-  std::memcpy(txt.data(), str.data(), txt.size());
+  if(!str.empty())
+    std::memcpy(txt.data(), str.data(), str.size());
+  txt.back() = '\0';
   buildIndex();
   sz.actual=false;
   }

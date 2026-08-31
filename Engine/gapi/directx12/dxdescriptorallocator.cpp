@@ -7,6 +7,11 @@
 using namespace Tempest;
 using namespace Tempest::Detail;
 
+namespace {
+constexpr UINT ResourceDescriptorLimit = 1'000'000;
+static_assert(ResourceDescriptorLimit>1);
+}
+
 DxDescriptorAllocator::Provider::~Provider() {
   if(last!=nullptr)
     last->Release();
@@ -65,7 +70,7 @@ DxDescriptorAllocator::DxDescriptorAllocator() {
 void DxDescriptorAllocator::setDevice(DxDevice& d) {
   auto& device = *d.device.get();
   UINT maxSmp = 2048;
-  UINT maxRes = 1'000'000;
+  UINT maxRes = ResourceDescriptorLimit;
 
   // https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
   D3D12_FEATURE_DATA_D3D12_OPTIONS feature0 = {};
@@ -73,15 +78,15 @@ void DxDescriptorAllocator::setDevice(DxDevice& d) {
     switch(feature0.ResourceBindingTier) {
       case D3D12_RESOURCE_BINDING_TIER_1:
         maxSmp = 16;
-        maxRes = 1,000,000;
+        maxRes = ResourceDescriptorLimit;
         break;
       case D3D12_RESOURCE_BINDING_TIER_2:
         maxSmp = 2048;
-        maxRes = 1,000,000;
+        maxRes = ResourceDescriptorLimit;
         break;
       case D3D12_RESOURCE_BINDING_TIER_3:
         maxSmp = 2048;
-        maxRes = 1'000'000; // or more
+        maxRes = ResourceDescriptorLimit; // or more
         break;
       }
     }
