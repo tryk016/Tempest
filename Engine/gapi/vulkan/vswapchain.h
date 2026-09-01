@@ -103,6 +103,9 @@ class VSwapchain : public AbstractGraphicsApi::Swapchain {
 
     VkFormat                 swapChainImageFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D               swapChainExtent = {};
+#if defined(__ANDROID__)
+    bool                     compositorTransform = false;
+#endif
 
     void                     cleanupSwapchain() noexcept;
     void                     cleanupSurface() noexcept;
@@ -119,6 +122,7 @@ class VSwapchain : public AbstractGraphicsApi::Swapchain {
     uint32_t                 findImageCount(const SwapChainSupport& support) const;
 
     VkResult                 implAcquireNextImage();
+    bool                     isSwapchainOutdated(VkResult code) const;
     void                     acquireNextImage();
   };
 

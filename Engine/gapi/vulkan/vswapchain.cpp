@@ -239,6 +239,9 @@ void VSwapchain::cleanupSwapchain() noexcept {
   swapChain            = VK_NULL_HANDLE;
   swapChainImageFormat = VK_FORMAT_UNDEFINED;
   swapChainExtent      = {};
+#if defined(__ANDROID__)
+  compositorTransform  = false;
+#endif
   imgIndex             = 0;
   frameId              = 0;
   }
@@ -316,7 +319,7 @@ void VSwapchain::createSwapchain(VDevice& device) {
       auto     support  = device.querySwapChainSupport(surface);
       uint32_t imgCount = findImageCount(support);
       auto     code     = createSwapchain(device,support,rect,imgCount);
-      if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR) {
+      if(isSwapchainOutdated(code)) {
         cleanupSwapchain();
 #if defined(__ANDROID__)
         if(attempt>=2)
@@ -383,7 +386,8 @@ VkResult VSwapchain::createSwapchain(VDevice& device, const SwapChainSupport& sw
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
     }
   createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-  if(swapChainSupport.capabilities.currentTransform!=VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+  compositorTransform = swapChainSupport.capabilities.currentTransform!=VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  if(compositorTransform)
     Log::i("Vulkan: Android presentation handles surface transform ",
            uint32_t(swapChainSupport.capabilities.currentTransform));
 #else
@@ -507,14 +511,10 @@ uint32_t VSwapchain::findImageCount(const SwapChainSupport& support) const {
 void VSwapchain::acquireNextImage() {
   VkResult code = implAcquireNextImage();
 
-  if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR
-#if defined(__ANDROID__)
-     || code==VK_ERROR_SURFACE_LOST_KHR
-#endif
-     )
+  if(isSwapchainOutdated(code))
     throw SwapchainSuboptimal();
 
-  if(code!=VK_SUCCESS)
+  if(code!=VK_SUCCESS && code!=VK_SUBOPTIMAL_KHR)
     vkAssert(code);
   }
 
@@ -563,6 +563,26 @@ VkResult VSwapchain::implAcquireNextImage() {
   return code;
   }
 
+bool VSwapchain::isSwapchainOutdated(VkResult code) const {
+  if(code==VK_ERROR_OUT_OF_DATE_KHR)
+    return true;
+#if defined(__ANDROID__)
+  if(code==VK_ERROR_SURFACE_LOST_KHR)
+    return true;
+  // Identity pre-transform deliberately delegates a non-identity display
+  // rotation to Android's presentation engine. Such a swapchain can report
+  // VK_SUBOPTIMAL_KHR indefinitely even though presentation succeeds. The
+  // Vulkan specification explicitly permits continuing to use it; rebuilding
+  // the identical swapchain cannot make it optimal and only stalls rendering.
+  if(code==VK_SUBOPTIMAL_KHR)
+    return !compositorTransform;
+#else
+  if(code==VK_SUBOPTIMAL_KHR)
+    return true;
+#endif
+  return false;
+  }
+
 void VSwapchain::present() {
   auto& slot = sync[frameId];
   auto& pf   = presentFence[frameId];
@@ -607,11 +627,7 @@ void VSwapchain::present() {
 
   auto tx = Application::tickCount();
   VkResult code = device.presentQueue->present(presentInfo);
-  if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR
-#if defined(__ANDROID__)
-     || code==VK_ERROR_SURFACE_LOST_KHR
-#endif
-     )
+  if(isSwapchainOutdated(code))
     throw SwapchainSuboptimal();
   tx = Application::tickCount()-tx;
   if(tx > 2) {
@@ -622,7 +638,8 @@ void VSwapchain::present() {
     // Log::i(str," : vkQueuePresentKHR[",imgIndex,"] = ", tx);
     }
   //Log::i("vkQueuePresentKHR[",imgIndex,"] = ", tx);
-  Detail::vkAssert(code);
+  if(code!=VK_SUCCESS && code!=VK_SUBOPTIMAL_KHR)
+    Detail::vkAssert(code);
 
   acquireNextImage();
   }
