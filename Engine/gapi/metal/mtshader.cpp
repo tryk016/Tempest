@@ -2,6 +2,7 @@
 
 #include "mtshader.h"
 
+#include <TargetConditionals.h>
 #include <Tempest/Log>
 #include <Tempest/Except>
 

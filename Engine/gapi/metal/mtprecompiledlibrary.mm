@@ -3,6 +3,7 @@
 #include "mtprecompiledlibrary.h"
 
 #include <Foundation/Foundation.hpp>
+#include <TargetConditionals.h>
 #include <dispatch/dispatch.h>
 
 using namespace Tempest;
@@ -60,12 +61,18 @@ NsPtr<MTL::Function> MtPrecompiledLibraries::find(
     std::string_view canonicalMsl,
     const MetalApi::PrecompiledShaderProfile& runtimeProfile) const {
   auto pool = NsPtr<NS::AutoreleasePool>::init();
+  MetalApi::PrecompiledShaderKey runtimeKey = {};
+  bool hasRuntimeKey = false;
   for(const auto& entry:entries) {
     if(entry.duplicate)
       continue;
     if(!sameGenerationProfile(entry.profile,runtimeProfile))
       continue;
-    if(MetalApi::precompiledShaderKey(canonicalMsl,entry.profile)!=entry.key)
+    if(!hasRuntimeKey) {
+      runtimeKey = MetalApi::precompiledShaderKey(canonicalMsl,runtimeProfile);
+      hasRuntimeKey = true;
+      }
+    if(runtimeKey!=entry.key)
       continue;
     if(entry.library>=libraries.size() || libraries[entry.library].impl==nullptr)
       continue;
