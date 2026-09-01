@@ -361,6 +361,8 @@ static bool initializeWindow(TempestWindow* window) {
   if(controller==nil)
     return false;
   window.rootViewController = controller;
+  window.multipleTouchEnabled = YES;
+  controller.view.multipleTouchEnabled = YES;
   [controller release];
   window.autoresizingMask = UIViewAutoresizingFlexibleWidth |
                             UIViewAutoresizingFlexibleHeight;
