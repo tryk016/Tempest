@@ -810,16 +810,20 @@ void MtCommandBuffer::copy(AbstractGraphicsApi::Buffer& dest, size_t offset,
                            offset, bpp*width,bpp*width*height);
   }
 
-#if defined(TEMPEST_BUILD_METALFX)
 bool MtCommandBuffer::spatialUpscale(AbstractGraphicsApi::SpatialScaler& scaler,
                                      AbstractGraphicsApi::Texture& input,
                                      AbstractGraphicsApi::Texture& output) {
+#if defined(TEMPEST_BUILD_METALFX)
+  auto* sx  = dynamic_cast<MtSpatialScaler*>(&scaler);
+  auto* src = dynamic_cast<MtTexture*>(&input);
+  auto* dst = dynamic_cast<MtTexture*>(&output);
+  if(sx==nullptr || src==nullptr || dst==nullptr || !sx->belongsTo(device))
+    return false;
   setEncoder(E_None,nullptr);
-  auto& sx  = reinterpret_cast<MtSpatialScaler&>(scaler);
-  auto& src = reinterpret_cast<MtTexture&>(input);
-  auto& dst = reinterpret_cast<MtTexture&>(output);
-  return sx.encode(*impl,src,dst);
-  }
+  return sx->encode(*impl,*src,*dst);
+#else
+  return AbstractGraphicsApi::CommandBuffer::spatialUpscale(scaler,input,output);
 #endif
+  }
 
 #endif
