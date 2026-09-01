@@ -156,6 +156,8 @@ if(TEMPEST_BUILD_VULKAN)
   endif()
 
   if(ANDROID)
+    target_include_directories(${PROJECT_NAME} BEFORE PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Vulkan-Headers/include")
     find_library(VULKAN_LIB vulkan)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${VULKAN_LIB})
   elseif(WIN32)

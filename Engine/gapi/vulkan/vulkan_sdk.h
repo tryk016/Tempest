@@ -2,5 +2,3 @@
 
 #define VK_DEFINE_NON_DISPATCHABLE_HANDLE(object) typedef uint64_t object;
 #include <vulkan/vulkan.h>
-
-#include "vulkan_sdk_compat.h"
