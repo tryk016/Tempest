@@ -118,13 +118,23 @@ struct Tempest::VulkanApi::Impl {
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
 
-    std::vector<const char*> rqExt = {
-      VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+    auto ext = instExtensionsList();
+    const std::initializer_list<const char*> requiredExt = {
       VK_KHR_SURFACE_EXTENSION_NAME,
       SURFACE_EXTENSION_NAME,
       };
+    for(auto name:requiredExt) {
+      if(!extensionSupport(ext,name)) {
+        Log::e("VulkanApi: required instance extension is unavailable: ",name);
+        throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+        }
+      }
 
-    auto ext = instExtensionsList();
+    std::vector<const char*> rqExt(requiredExt);
+    const bool hasDebugReport = validation && extensionSupport(ext,VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+    if(hasDebugReport)
+      rqExt.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+
     if(extensionSupport(ext, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
       rqExt.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
       hasDeviceFeatures2 = true;
@@ -144,24 +154,29 @@ struct Tempest::VulkanApi::Impl {
     if(ret!=VK_SUCCESS)
       throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 
-    if(validation) {
+    if(hasDebugReport) {
       auto vkCreateDebugReportCallbackEXT = PFN_vkCreateDebugReportCallbackEXT (vkGetInstanceProcAddr(instance,"vkCreateDebugReportCallbackEXT"));
       vkDestroyDebugReportCallbackEXT     = PFN_vkDestroyDebugReportCallbackEXT(vkGetInstanceProcAddr(instance,"vkDestroyDebugReportCallbackEXT"));
 
-      /* Setup callback creation information */
-      VkDebugReportCallbackCreateInfoEXT callbackCreateInfo;
-      callbackCreateInfo.sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
-      callbackCreateInfo.pNext       = nullptr;
-      callbackCreateInfo.flags       = VK_DEBUG_REPORT_ERROR_BIT_EXT |
-                                       VK_DEBUG_REPORT_WARNING_BIT_EXT |
-                                       VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-      callbackCreateInfo.pfnCallback = &debugReportCallback;
-      callbackCreateInfo.pUserData   = nullptr;
+      if(vkCreateDebugReportCallbackEXT==nullptr || vkDestroyDebugReportCallbackEXT==nullptr) {
+        Log::e("VulkanApi: debug-report entry points are unavailable");
+        vkDestroyDebugReportCallbackEXT = nullptr;
+        } else {
+        /* Setup callback creation information */
+        VkDebugReportCallbackCreateInfoEXT callbackCreateInfo = {};
+        callbackCreateInfo.sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
+        callbackCreateInfo.pNext       = nullptr;
+        callbackCreateInfo.flags       = VK_DEBUG_REPORT_ERROR_BIT_EXT |
+                                         VK_DEBUG_REPORT_WARNING_BIT_EXT |
+                                         VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
+        callbackCreateInfo.pfnCallback = &debugReportCallback;
+        callbackCreateInfo.pUserData   = nullptr;
 
-      /* Register the callback */
-      VkResult result = vkCreateDebugReportCallbackEXT(instance, &callbackCreateInfo, nullptr, &callback);
-      if(result!=VK_SUCCESS)
-        Log::e("VulkanApi: unable to setup validation callback");
+        /* Register the callback */
+        VkResult result = vkCreateDebugReportCallbackEXT(instance, &callbackCreateInfo, nullptr, &callback);
+        if(result!=VK_SUCCESS)
+          Log::e("VulkanApi: unable to setup validation callback");
+        }
       }
     }
 
