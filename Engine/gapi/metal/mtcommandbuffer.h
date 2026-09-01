@@ -9,7 +9,6 @@
 #include "mtfbolayout.h"
 #include "mtpipelinelay.h"
 #include "nsptr.h"
-#include "mtmetalfx.h"
 
 namespace Tempest {
 
@@ -25,9 +24,6 @@ class MtDescriptorArray;
 class MtTopAccelerationStructure;
 #if defined(TEMPEST_BUILD_METALFX)
 class MtSpatialScaler;
-#endif
-#if defined(TEMPEST_BUILD_METALFX_TEMPORAL)
-class MtTemporalScaler;
 #endif
 class MtSwapchainFrame;
 
@@ -80,14 +76,6 @@ class MtCommandBuffer : public AbstractGraphicsApi::CommandBuffer {
     bool spatialUpscale(AbstractGraphicsApi::SpatialScaler& scaler,
                         AbstractGraphicsApi::Texture& input,
                         AbstractGraphicsApi::Texture& output) override;
-#endif
-#if defined(TEMPEST_BUILD_METALFX_TEMPORAL)
-    bool temporalUpscale(AbstractGraphicsApi::TemporalScaler& scaler,
-                         AbstractGraphicsApi::Texture& input,
-                         AbstractGraphicsApi::Texture& depth,
-                         AbstractGraphicsApi::Texture& motion,
-                         AbstractGraphicsApi::Texture& output,
-                         const TemporalScalerArgs& args) override;
 #endif
 
   private:
