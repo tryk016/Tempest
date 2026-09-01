@@ -506,14 +506,22 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
   deviceFeatures.fragmentStoresAndAtomics       = supportedFeatures.fragmentStoresAndAtomics;
 
   // non-bindless limit
-  props.descriptors.maxSamplers = std::max(devP.limits.maxDescriptorSetSamplers,
+  // Descriptor arrays must fit both the set-wide and per-stage limits. Using
+  // the larger value advertises layouts that are invalid on the same device.
+  props.descriptors.maxSamplers = std::min(devP.limits.maxDescriptorSetSamplers,
                                            devP.limits.maxPerStageDescriptorSamplers);
-  props.descriptors.maxTexture = std::max(devP.limits.maxDescriptorSetSampledImages,
+  props.descriptors.maxTexture = std::min(devP.limits.maxDescriptorSetSampledImages,
                                           devP.limits.maxPerStageDescriptorSampledImages);
-  props.descriptors.maxStorage = max(devP.limits.maxDescriptorSetStorageBuffers,
-                                     devP.limits.maxPerStageDescriptorStorageBuffers,
-                                     devP.limits.maxDescriptorSetStorageImages,
-                                     devP.limits.maxPerStageDescriptorStorageImages);
+  props.descriptors.maxStorageBuffers =
+      std::min(devP.limits.maxDescriptorSetStorageBuffers,
+               devP.limits.maxPerStageDescriptorStorageBuffers);
+  props.descriptors.maxStorageImages =
+      std::min(devP.limits.maxDescriptorSetStorageImages,
+               devP.limits.maxPerStageDescriptorStorageImages);
+  props.descriptors.maxStorage =
+      std::min(props.descriptors.maxStorageBuffers,
+               props.descriptors.maxStorageImages);
+  props.descriptors.maxResources = devP.limits.maxPerStageResources;
 
   if(hasDeviceFeatures2) {
     VkPhysicalDeviceFeatures2 features = {};
@@ -549,6 +557,9 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
 
     VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
     indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+
+    VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features = {};
+    robustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
 
     VkPhysicalDeviceRobustness2PropertiesEXT rebustness2Props = {};
     rebustness2Props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_PROPERTIES_EXT;
@@ -597,6 +608,9 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
       features.pNext = &indexingFeatures;
       }
     if(props.hasRobustness2) {
+      robustness2Features.pNext = features.pNext;
+      features.pNext = &robustness2Features;
+
       rebustness2Props.pNext = properties.pNext;
       properties.pNext = &rebustness2Props;
       }
@@ -632,6 +646,8 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
     props.meshlets.maxGroupSize.x = meshProperties.maxMeshWorkGroupSize[0];
     props.meshlets.maxGroupSize.y = meshProperties.maxMeshWorkGroupSize[1];
     props.meshlets.maxGroupSize.z = meshProperties.maxMeshWorkGroupSize[2];
+
+    props.hasNullDescriptor = (robustness2Features.nullDescriptor==VK_TRUE);
 
     props.accelerationStructureScratchOffsetAlignment = asProperties.minAccelerationStructureScratchOffsetAlignment;
 
@@ -673,7 +689,10 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
       const auto maxRes = (props.resourceHeapMaxSize - props.resourceHeapReserve)/props.resourceDescriptorSize;
       props.descriptors.maxSamplers = (props.samplerHeapMaxSize  - props.samplerHeapReserve )/props.samplerDescriptorSize;
       props.descriptors.maxStorage  = maxRes/2;
+      props.descriptors.maxStorageBuffers = maxRes/2;
+      props.descriptors.maxStorageImages  = maxRes/2;
       props.descriptors.maxTexture  = maxRes/2;
+      props.descriptors.maxResources = maxRes;
 
       props.heapAlignment = uint32_t(std::max(dheapProps.resourceHeapAlignment, dheapProps.samplerHeapAlignment));
       }
@@ -935,15 +954,19 @@ uint32_t VDevice::roundUpDescriptorCount(ShaderReflection::Class cls, size_t cnt
   switch(cls) {
     case ShaderReflection::Texture:
     case ShaderReflection::Image:
+      cntRound = std::min(cntRound, props.descriptors.maxTexture);
+      break;
     case ShaderReflection::ImgR:
     case ShaderReflection::ImgRW:
-      cntRound = std::min(cntRound, props.descriptors.maxTexture);
+      cntRound = std::min(cntRound, props.descriptors.maxStorageImages);
       break;
     case ShaderReflection::Sampler:
       cntRound = std::min(cntRound, props.descriptors.maxSamplers);
       break;
     case ShaderReflection::SsboR:
     case ShaderReflection::SsboRW:
+      cntRound = std::min(cntRound, props.descriptors.maxStorageBuffers);
+      break;
     case ShaderReflection::Tlas:
       cntRound = std::min(cntRound, props.descriptors.maxStorage);
       break;

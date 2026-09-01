@@ -294,16 +294,22 @@ void DxDevice::getProp(DXGI_ADAPTER_DESC1& desc, ID3D12Device& dev, DxProps& pro
         prop.descriptors.maxSamplers = 16;
         prop.descriptors.maxTexture  = 64;
         prop.descriptors.maxStorage  = 8;  // 64 for feature levels 11.1, but pointless anyway
+        prop.descriptors.maxStorageBuffers = prop.descriptors.maxStorage;
+        prop.descriptors.maxStorageImages  = prop.descriptors.maxStorage;
         break;
       case D3D12_RESOURCE_BINDING_TIER_2:
         prop.descriptors.maxSamplers = 2048;
         prop.descriptors.maxTexture  = 500'000;
         prop.descriptors.maxStorage  = 64;
+        prop.descriptors.maxStorageBuffers = prop.descriptors.maxStorage;
+        prop.descriptors.maxStorageImages  = prop.descriptors.maxStorage;
         break;
       case D3D12_RESOURCE_BINDING_TIER_3:
         prop.descriptors.maxSamplers = 2048;
         prop.descriptors.maxTexture  = 500'000; // half-heap for both
         prop.descriptors.maxStorage  = 500'000;
+        prop.descriptors.maxStorageBuffers = prop.descriptors.maxStorage;
+        prop.descriptors.maxStorageImages  = prop.descriptors.maxStorage;
         break;
       }
     }

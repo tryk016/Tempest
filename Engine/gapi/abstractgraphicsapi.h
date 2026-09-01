@@ -451,8 +451,11 @@ namespace Tempest {
           struct {
             bool     nonUniformIndexing = false;
             uint32_t maxStorage         = 500000;
+            uint32_t maxStorageBuffers  = 500000;
+            uint32_t maxStorageImages   = 500000;
             uint32_t maxTexture         = 500000;
             uint32_t maxSamplers        = 2048;
+            uint32_t maxResources       = 500000;
             } descriptors;
 
           struct {

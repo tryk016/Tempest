@@ -359,6 +359,7 @@ class VDevice : public AbstractGraphicsApi::Device {
       bool     hasSpirv_1_4Ext    = false;
       bool     hasDebugMarker     = false;
       bool     hasRobustness2     = false;
+      bool     hasNullDescriptor  = false;
       bool     hasStoreOpNone     = false;
       bool     hasMaintenance1    = false;
       bool     hasMaintenance5    = false;

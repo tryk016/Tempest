@@ -211,12 +211,12 @@ void VPushDescriptor::write(VDevice& dev, VkWriteDescriptorSet& wx, WriteInfo& i
       //TODO: head only ssbo
       info.range  = VK_WHOLE_SIZE; //(buf!=nullptr && slot.varByteSize==0) ? slot.byteSize : VK_WHOLE_SIZE;
 
-      if(!dev.props.hasRobustness2 && buf==nullptr) {
+      if(!dev.props.hasNullDescriptor && buf==nullptr) {
         //NOTE1: use of null-handle is not allowed, unless VK_EXT_robustness2
-        //NOTE2: sizeof 1 is rouned up in shader; and sizeof 0 is illegal but harmless(hopefully)
+        //NOTE2: use a valid dummy range; zero-sized descriptor ranges are illegal.
         info.buffer = dev.dummySsbo().impl;
         info.offset = 0;
-        info.range  = 0;
+        info.range  = VK_WHOLE_SIZE;
         }
 
       wx.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

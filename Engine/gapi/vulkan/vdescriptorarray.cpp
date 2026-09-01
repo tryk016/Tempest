@@ -9,10 +9,24 @@
 using namespace Tempest;
 using namespace Tempest::Detail;
 
+static void validateTextureDescriptors(const VDevice& dev,
+                                       AbstractGraphicsApi::Texture* const* tex,
+                                       size_t cnt) {
+  if(dev.props.hasNullDescriptor)
+    return;
+  for(size_t i=0; i<cnt; ++i)
+    if(tex[i]==nullptr)
+      throw std::system_error(GraphicsErrc::InvalidTexture,
+                              "null texture descriptor requires VK_EXT_robustness2");
+  }
+
 VDescriptorArray::VDescriptorArray(VDevice &dev, AbstractGraphicsApi::Texture **tex, size_t cnt, uint32_t mipLevel, const Sampler &smp)
   : dev(dev), cnt(cnt) {
+  validateTextureDescriptors(dev,tex,cnt);
   // Roundup a little, to avoid spamming of layouts
   const uint32_t cntRound = dev.roundUpDescriptorCount(ShaderReflection::Texture, cnt);
+  if(cntRound<cnt)
+    throw std::system_error(GraphicsErrc::TooLargeTexture);
 
   const auto lay = dev.bindlessArrayLayout(ShaderReflection::Texture, cntRound);
   alloc(lay, dev, ShaderReflection::Texture, cntRound);
@@ -21,8 +35,11 @@ VDescriptorArray::VDescriptorArray(VDevice &dev, AbstractGraphicsApi::Texture **
 
 VDescriptorArray::VDescriptorArray(VDevice &dev, AbstractGraphicsApi::Texture **tex, size_t cnt, uint32_t mipLevel)
   : dev(dev), cnt(cnt) {
+  validateTextureDescriptors(dev,tex,cnt);
   // Roundup a little, to avoid spamming of layouts
   const uint32_t cntRound = dev.roundUpDescriptorCount(ShaderReflection::Image, cnt);
+  if(cntRound<cnt)
+    throw std::system_error(GraphicsErrc::TooLargeTexture);
 
   const auto lay = dev.bindlessArrayLayout(ShaderReflection::Image, cntRound);
   alloc(lay, dev, ShaderReflection::Image, cntRound);
@@ -33,6 +50,8 @@ VDescriptorArray::VDescriptorArray(VDevice &dev, AbstractGraphicsApi::Buffer **b
   : dev(dev), cnt(cnt) {
   // Roundup a little, to avoid spamming of layouts
   const uint32_t cntRound = dev.roundUpDescriptorCount(ShaderReflection::SsboRW, cnt);
+  if(cntRound<cnt)
+    throw std::system_error(GraphicsErrc::TooLargeBuffer);
 
   const auto lay = dev.bindlessArrayLayout(ShaderReflection::SsboRW, cntRound);
   alloc(lay, dev, ShaderReflection::SsboRW, cntRound);
@@ -109,10 +128,10 @@ void VDescriptorArray::populate(VDevice &dev, AbstractGraphicsApi::Buffer **b, s
     bufInfo[i].buffer = buf!=nullptr ? buf->impl : VK_NULL_HANDLE;
     bufInfo[i].offset = 0;
     bufInfo[i].range  = VK_WHOLE_SIZE;
-    if(!dev.props.hasRobustness2 && buf==nullptr) {
+    if(!dev.props.hasNullDescriptor && buf==nullptr) {
       bufInfo[i].buffer = dev.dummySsbo().impl;
       bufInfo[i].offset = 0;
-      bufInfo[i].range  = 0;
+      bufInfo[i].range  = VK_WHOLE_SIZE;
       }
     // assert(buf->nonUniqId==0);
     if(buf!=nullptr)

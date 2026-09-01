@@ -395,11 +395,15 @@ void MtDevice::deductProps(AbstractGraphicsApi::Props& prop, MTL::Device& dev) {
   if(dev.supportsFamily(MTL::GPUFamilyMetal3) && dev.argumentBuffersSupport()>=MTL::ArgumentBuffersTier2) {
     prop.descriptors.nonUniformIndexing = true;
     prop.descriptors.maxStorage         = 500000;
+    prop.descriptors.maxStorageBuffers  = prop.descriptors.maxStorage;
+    prop.descriptors.maxStorageImages   = prop.descriptors.maxStorage;
     prop.descriptors.maxTexture         = 500000;
     prop.descriptors.maxSamplers        = 2048;
     } else {
     // 30 total bindings + reserve 2 for internal use
     prop.descriptors.maxStorage         = 10;
+    prop.descriptors.maxStorageBuffers  = prop.descriptors.maxStorage;
+    prop.descriptors.maxStorageImages   = prop.descriptors.maxStorage;
     prop.descriptors.maxTexture         = 10;
     prop.descriptors.maxSamplers        = 8;
     }
