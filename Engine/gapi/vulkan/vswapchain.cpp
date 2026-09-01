@@ -3,6 +3,7 @@
 #include "vswapchain.h"
 
 #include <Tempest/Application>
+#include <Tempest/Log>
 #include <Tempest/SystemApi>
 #include <Tempest/Platform>
 
@@ -321,7 +322,23 @@ VkResult VSwapchain::createSwapchain(VDevice& device, const SwapChainSupport& sw
     createInfo.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
     }
 
-  createInfo.preTransform   = swapChainSupport.capabilities.currentTransform;
+#if defined(__ANDROID__)
+  // Tempest does not yet rotate clip-space, viewports and scissors for Vulkan
+  // surface pre-rotation. Advertising currentTransform here would therefore
+  // rotate already-landscape game content a second time. Request identity and
+  // let Android's presentation engine perform the transform until the renderer
+  // exposes explicit pre-rotation support.
+  if((swapChainSupport.capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)==0) {
+    Log::e("Vulkan: Android surface does not support identity presentation transform");
+    throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+    }
+  createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  if(swapChainSupport.capabilities.currentTransform!=VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+    Log::i("Vulkan: Android presentation handles surface transform ",
+           uint32_t(swapChainSupport.capabilities.currentTransform));
+#else
+  createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+#endif
   createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   createInfo.presentMode    = presentMode;
   createInfo.clipped        = VK_FALSE;
