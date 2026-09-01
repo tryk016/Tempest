@@ -6,6 +6,7 @@
 
 #include <Tempest/Log>
 #include <Foundation/NSProcessInfo.h>
+#include <TargetConditionals.h>
 // #include <Metal/MTLPixelFormat.h>
 
 using namespace Tempest;
@@ -34,6 +35,37 @@ static MTL::LanguageVersion languageVersion() {
   auto opt = NsPtr<MTL::CompileOptions>::init();
   // clamp version to hight-most tested in engine
   return std::min<MTL::LanguageVersion>(MTL::LanguageVersion3_1, opt->languageVersion());
+  }
+
+MetalApi::PrecompiledShaderProfile MtDevice::precompiledShaderProfile(
+    MTL::Device& device, MetalApi::PrecompiledShaderStage stage,
+    MTL::LanguageVersion language) noexcept {
+  MetalApi::PrecompiledShaderProfile profile;
+  profile.stage = stage;
+#if defined(__OSX__)
+  profile.platform = MetalApi::PrecompiledPlatform::MacOS;
+#elif defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
+  profile.platform = MetalApi::PrecompiledPlatform::IOSSimulator;
+#else
+  profile.platform = MetalApi::PrecompiledPlatform::IOSDevice;
+#endif
+
+  const uint32_t major = uint32_t(language) >> 16u;
+  const uint32_t minor = uint32_t(language) & 0xFFFFu;
+  profile.mslVersion = spirv_cross::CompilerMSL::Options::make_msl_version(major,minor,0);
+
+  const bool tier2 = device.supportsFamily(MTL::GPUFamilyMetal3) &&
+                     device.argumentBuffersSupport()>=MTL::ArgumentBuffersTier2;
+  profile.argumentBuffersTier        = uint8_t(tier2 ? 1 : 0);
+  profile.runtimeArrayRichDescriptor = tier2;
+  profile.readWriteTextureFences     = language<MTL::LanguageVersion2_0;
+  profile.nativeImageAtomics         = language>=MTL::LanguageVersion3_1;
+  if(!profile.nativeImageAtomics) {
+    profile.r32uiLinearTextureAlignment = uint32_t(
+        device.minimumLinearTextureAlignmentForPixelFormat(MTL::PixelFormatR32Uint));
+    profile.r32uiAlignmentConstantId = 0;
+    }
+  return profile;
   }
 
 MtDevice::MtDevice(std::string_view name, bool validation,

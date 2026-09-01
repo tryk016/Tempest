@@ -6,6 +6,8 @@
 
 #include "nsptr.h"
 
+#include <array>
+#include <atomic>
 #include <string_view>
 #include <vector>
 
@@ -39,6 +41,8 @@ class MtPrecompiledLibraries final {
 
     std::vector<Library> libraries;
     std::vector<Entry>   entries;
+    mutable std::array<std::atomic_bool,8> profileMismatchReported = {};
+    mutable std::atomic_size_t             hitCount = 0;
   };
 
 }

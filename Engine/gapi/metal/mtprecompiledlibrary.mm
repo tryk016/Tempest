@@ -3,6 +3,7 @@
 #include "mtprecompiledlibrary.h"
 
 #include <Foundation/Foundation.hpp>
+#include <Tempest/Log>
 #include <TargetConditionals.h>
 #include <dispatch/dispatch.h>
 
@@ -63,11 +64,18 @@ NsPtr<MTL::Function> MtPrecompiledLibraries::find(
   auto pool = NsPtr<NS::AutoreleasePool>::init();
   MetalApi::PrecompiledShaderKey runtimeKey = {};
   bool hasRuntimeKey = false;
+  bool hasProfileCandidate = false;
+  bool hasMatchingProfile = false;
   for(const auto& entry:entries) {
     if(entry.duplicate)
       continue;
+    if(entry.profile.platform!=runtimeProfile.platform ||
+       entry.profile.stage!=runtimeProfile.stage)
+      continue;
+    hasProfileCandidate = true;
     if(!sameGenerationProfile(entry.profile,runtimeProfile))
       continue;
+    hasMatchingProfile = true;
     if(!hasRuntimeKey) {
       runtimeKey = MetalApi::precompiledShaderKey(canonicalMsl,runtimeProfile);
       hasRuntimeKey = true;
@@ -91,7 +99,15 @@ NsPtr<MTL::Function> MtPrecompiledLibraries::find(
       continue;
     if(!sameStage(fn->functionType(),runtimeProfile.stage))
       continue;
+    const size_t hits = hitCount.fetch_add(1,std::memory_order_relaxed)+1;
+    Log::d("Precompiled Metal shader cache hit (",hits,"/",entries.size(),")");
     return fn;
+    }
+  if(hasProfileCandidate && !hasMatchingProfile) {
+    auto& reported = profileMismatchReported[size_t(runtimeProfile.stage)];
+    bool expected = false;
+    if(reported.compare_exchange_strong(expected,true,std::memory_order_relaxed))
+      Log::d("Precompiled Metal shader profile mismatch; using runtime compilation");
     }
   return NsPtr<MTL::Function>();
   }

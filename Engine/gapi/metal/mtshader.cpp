@@ -2,7 +2,6 @@
 
 #include "mtshader.h"
 
-#include <TargetConditionals.h>
 #include <Tempest/Log>
 #include <Tempest/Except>
 
@@ -15,12 +14,6 @@
 
 using namespace Tempest;
 using namespace Tempest::Detail;
-
-static uint32_t spvVersion(MTL::LanguageVersion v) {
-  const uint32_t major = v >> 16u;
-  const uint32_t minor = v & 0xFFFF;
-  return spirv_cross::CompilerMSL::Options::make_msl_version(major,minor,0);
-  }
 
 static MetalApi::PrecompiledShaderStage shaderStage(ShaderReflection::Stage stage) {
   switch(stage) {
@@ -41,46 +34,26 @@ MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
   : Shader(source, srcSize) {
   auto pool = NsPtr<NS::AutoreleasePool>::init();
   spirv_cross::CompilerMSL::Options optMSL;
-  MetalApi::PrecompiledShaderProfile precompiledProfile;
-#if defined(__OSX__)
-  optMSL.platform = spirv_cross::CompilerMSL::Options::macOS;
-  precompiledProfile.platform = MetalApi::PrecompiledPlatform::MacOS;
-#else
-  optMSL.platform = spirv_cross::CompilerMSL::Options::iOS;
-#if defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
-  precompiledProfile.platform = MetalApi::PrecompiledPlatform::IOSSimulator;
-#else
-  precompiledProfile.platform = MetalApi::PrecompiledPlatform::IOSDevice;
-#endif
-#endif
-  optMSL.buffer_size_buffer_index = MSL_BUFFER_LENGTH;
-  precompiledProfile.stage                 = shaderStage(stage);
-  precompiledProfile.bufferSizeBufferIndex = MSL_BUFFER_LENGTH;
+  MetalApi::PrecompiledShaderProfile precompiledProfile =
+      MtDevice::precompiledShaderProfile(*dev.impl,shaderStage(stage),dev.prop.mslVersion);
+  optMSL.platform = precompiledProfile.platform==MetalApi::PrecompiledPlatform::MacOS
+                  ? spirv_cross::CompilerMSL::Options::macOS
+                  : spirv_cross::CompilerMSL::Options::iOS;
+  optMSL.msl_version                   = precompiledProfile.mslVersion;
+  optMSL.buffer_size_buffer_index      = precompiledProfile.bufferSizeBufferIndex;
+  optMSL.argument_buffers_tier         =
+      spirv_cross::CompilerMSL::Options::ArgumentBuffersTier(precompiledProfile.argumentBuffersTier);
+  optMSL.runtime_array_rich_descriptor = precompiledProfile.runtimeArrayRichDescriptor;
+  optMSL.readwrite_texture_fences      = precompiledProfile.readWriteTextureFences;
+  optMSL.r32ui_linear_texture_alignment= precompiledProfile.r32uiLinearTextureAlignment;
+  optMSL.r32ui_alignment_constant_id   = precompiledProfile.r32uiAlignmentConstantId;
 
   spirv_cross::CompilerGLSL::Options optGLSL;
-  optGLSL.vertex.flip_vert_y = true;
+  optGLSL.vertex.flip_vert_y = precompiledProfile.flipVertY;
 
   std::string msl;
   try {
     spirv_cross::CompilerMSL comp(reinterpret_cast<const uint32_t*>(source),srcSize/4);
-    optMSL.msl_version = spvVersion(dev.prop.mslVersion);
-    if(dev.prop.descriptors.nonUniformIndexing) {
-      optMSL.argument_buffers_tier = spirv_cross::CompilerMSL::Options::ArgumentBuffersTier::Tier2;
-      optMSL.runtime_array_rich_descriptor = true;
-      }
-
-    if(dev.prop.mslVersion>=MTL::LanguageVersion2_0) {
-      // can relay on threadgroup_barrier(mem_flags::mem_texture) instead
-      optMSL.readwrite_texture_fences = false;
-      }
-
-    const bool nativeImageAtomics = dev.useNativeImageAtomic();
-    if(!nativeImageAtomics) {
-      const uint32_t align = dev.linearImageAlignment();
-      optMSL.r32ui_linear_texture_alignment = align;
-      optMSL.r32ui_alignment_constant_id    = 0;
-      }
-
     for(auto& cap:comp.get_declared_capabilities()) {
       switch(cap) {
         case spv::CapabilityRayQueryKHR: {
@@ -102,9 +75,6 @@ MtShader::MtShader(MtDevice& dev, const void* source, size_t srcSize)
     precompiledProfile.argumentBuffersTier        = uint8_t(optMSL.argument_buffers_tier);
     precompiledProfile.runtimeArrayRichDescriptor = optMSL.runtime_array_rich_descriptor;
     precompiledProfile.readWriteTextureFences     = optMSL.readwrite_texture_fences;
-    precompiledProfile.nativeImageAtomics         = nativeImageAtomics;
-    precompiledProfile.r32uiLinearTextureAlignment= optMSL.r32ui_linear_texture_alignment;
-    precompiledProfile.r32uiAlignmentConstantId   = optMSL.r32ui_alignment_constant_id;
     comp.set_msl_options   (optMSL );
     comp.set_common_options(optGLSL);
 

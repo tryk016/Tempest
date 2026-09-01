@@ -24,6 +24,7 @@
 
 #include <Metal/Metal.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <stdexcept>
@@ -234,6 +235,28 @@ MetalApi::PrecompiledLibraryHash MetalApi::precompiledLibraryHash(const void* da
   if(data==nullptr && size!=0)
     return {};
   return MtSha256::hash(data,size);
+  }
+
+bool MetalApi::currentPrecompiledShaderProfile(PrecompiledShaderStage stage,
+                                               PrecompiledShaderProfile& profile) noexcept {
+  if(uint8_t(stage)>uint8_t(PrecompiledShaderStage::Mesh))
+    return false;
+  try {
+    auto pool = NsPtr<NS::AutoreleasePool>::init();
+    auto device = NsPtr<MTL::Device>(MTL::CreateSystemDefaultDevice());
+    if(device==nullptr)
+      return false;
+    auto options = NsPtr<MTL::CompileOptions>::init();
+    if(options==nullptr)
+      return false;
+    const auto language = std::min<MTL::LanguageVersion>(MTL::LanguageVersion3_1,
+                                                        options->languageVersion());
+    profile = MtDevice::precompiledShaderProfile(*device,stage,language);
+    return profile.mslVersion!=0;
+    }
+  catch(...) {
+    return false;
+    }
   }
 
 #if !defined(TEMPEST_BUILD_METALFX)

@@ -272,6 +272,28 @@ TEST(MetalApi,PrecompiledKeyCoversProfile) {
 #endif
   }
 
+TEST(MetalApi,CurrentPrecompiledProfile) {
+#if defined(__OSX__) && defined(TEMPEST_TEST_METAL_PRECOMPILED)
+  MetalApi::PrecompiledShaderProfile vertex;
+  ASSERT_TRUE(MetalApi::currentPrecompiledShaderProfile(
+      MetalApi::PrecompiledShaderStage::Vertex,vertex));
+  EXPECT_EQ(vertex.platform,MetalApi::PrecompiledPlatform::MacOS);
+  EXPECT_EQ(vertex.stage,MetalApi::PrecompiledShaderStage::Vertex);
+  EXPECT_GT(vertex.mslVersion,0u);
+  EXPECT_EQ(vertex.bufferSizeBufferIndex,29u);
+  EXPECT_EQ(vertex.runtimeArrayRichDescriptor,vertex.argumentBuffersTier==1);
+  EXPECT_EQ(vertex.readWriteTextureFences,vertex.mslVersion<20000u);
+
+  MetalApi::PrecompiledShaderProfile fragment;
+  ASSERT_TRUE(MetalApi::currentPrecompiledShaderProfile(
+      MetalApi::PrecompiledShaderStage::Fragment,fragment));
+  EXPECT_EQ(fragment.stage,MetalApi::PrecompiledShaderStage::Fragment);
+  vertex.stage = fragment.stage;
+  EXPECT_EQ(MetalApi::precompiledShaderKey("shader",vertex),
+            MetalApi::precompiledShaderKey("shader",fragment));
+#endif
+  }
+
 TEST(MetalApi,PrecompiledLibraryValidHitAndLifetime) {
 #if defined(__OSX__) && defined(TEMPEST_TEST_METAL_PRECOMPILED)
   TemporaryMetallib fixture;

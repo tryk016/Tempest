@@ -284,6 +284,10 @@ class MtDevice : public AbstractGraphicsApi::Device {
     bool     useNativeImageAtomic() const;
     uint32_t linearImageAlignment() const;
 
+    static MetalApi::PrecompiledShaderProfile precompiledShaderProfile(
+        MTL::Device& device, MetalApi::PrecompiledShaderStage stage,
+        MTL::LanguageVersion language) noexcept;
+
     void     onSubmit();
     void     onFinish();
     void     waitIdle() override;

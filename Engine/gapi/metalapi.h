@@ -109,6 +109,10 @@ class MetalApi : public AbstractGraphicsApi {
     /** Computes the full SHA-256 identity of a target-specific metallib. */
     static PrecompiledLibraryHash precompiledLibraryHash(const void* data, size_t size);
 
+    /** Returns the canonical shader-generation profile for the default Metal device. */
+    static bool currentPrecompiledShaderProfile(PrecompiledShaderStage stage,
+                                                PrecompiledShaderProfile& profile) noexcept;
+
     std::vector<Props> devices() const override;
 
   protected:
