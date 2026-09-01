@@ -85,11 +85,7 @@ void Painter::implSetColor(float r, float g, float b, float a) {
 void Painter::drawTriangle(int x0, int y0, float u0, float v0,
                            int x1, int y1, float u1, float v1,
                            int x2, int y2, float u2, float v2) {
-  if(state!=StBrush) {
-    dev.setTopology(Triangles);
-    state=StBrush;
-    implBrush(s.br);
-    }
+  implBeginBrush();
   FPoint trigBuf[4+4+4+4];
   implDrawTrig( float(x0), float(y0), s.dU+u0*s.invW,s.dV+v0*s.invH,
                 float(x1), float(y1), s.dU+u1*s.invW,s.dV+v1*s.invH,
@@ -100,11 +96,7 @@ void Painter::drawTriangle(int x0, int y0, float u0, float v0,
 void Painter::drawTriangle(float x0, float y0, float u0, float v0,
                            float x1, float y1, float u1, float v1,
                            float x2, float y2, float u2, float v2) {
-  if(state!=StBrush) {
-    dev.setTopology(Triangles);
-    state=StBrush;
-    implBrush(s.br);
-    }
+  implBeginBrush();
   FPoint trigBuf[4+4+4+4];
   implDrawTrig( x0, y0, s.dU+u0*s.invW,s.dV+v0*s.invH,
                 x1, y1, s.dU+u1*s.invW,s.dV+v1*s.invH,
@@ -253,12 +245,16 @@ void Painter::implPen(const Pen &p) {
   implSetColor(p.color.r(),p.color.g(),p.color.b(),p.color.a());
   }
 
+void Painter::implBeginBrush() {
+  if(state==StBrush)
+    return;
+  dev.setTopology(Triangles);
+  state = StBrush;
+  implBrush(s.br);
+  }
+
 void Painter::implDrawRect(int x1, int y1, int x2, int y2, float u1, float v1, float u2, float v2) {
-  if(state!=StBrush) {
-    dev.setTopology(Triangles);
-    state=StBrush;
-    implBrush(s.br);
-    }
+  implBeginBrush();
 
   if(T_LIKELY(s.tr.mat.type()==Transform::T_AxisAligned)) {
     s.tr.mat.map(x1,y1, x1,y1);
@@ -338,11 +334,7 @@ void Painter::implDrawRect(int x1, int y1, int x2, int y2, float u1, float v1, f
   }
 
 void Painter::implDrawRectF(float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2) {
-  if(state!=StBrush) {
-    dev.setTopology(Triangles);
-    state=StBrush;
-    implBrush(s.br);
-    }
+  implBeginBrush();
   float x[4] = {float(x1), float(x2), float(x2), float(x1)};
   float y[4] = {float(y1), float(y1), float(y2), float(y2)};
   for(size_t i=0;i<4;++i)
@@ -366,11 +358,7 @@ void Painter::implDrawWideLine(float width, int x1, int y1, int x2, int y2) {
     return;
   ortho = (ortho/l)*width*0.5f;
 
-  if(state!=StBrush) {
-    dev.setTopology(Triangles);
-    state=StBrush;
-    implBrush(s.br);
-    }
+  implBeginBrush();
 
   float u1 = 0, v1 = 0, u2 = 0, v2 = 0;
   float x[4] = {float(x1)-ortho.x, float(x2)-ortho.x, float(x2)+ortho.x, float(x1)+ortho.x};

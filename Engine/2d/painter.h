@@ -121,6 +121,7 @@ class Painter {
 
     void implBrush(const Brush& b);
     void implPen  (const Pen&   p);
+    void implBeginBrush();
 
     void implAddPoint(float x, float y, float u, float v);
     void implAddPoint(int   x, int   y, float u, float v);
