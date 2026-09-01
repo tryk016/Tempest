@@ -160,6 +160,7 @@ MtSwapchain::MtSwapchain(MtDevice& dev, SystemApi::Window *w,
   pimpl->view.wantsLayer = YES;
   pimpl->wnd.contentView = pimpl->view;
 #elif defined(__IOS__)
+  pimpl->view.multipleTouchEnabled = YES;
   pimpl->wnd.rootViewController.view = pimpl->view;
 #endif
 
