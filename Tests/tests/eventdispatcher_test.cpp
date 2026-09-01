@@ -10,8 +10,8 @@
 using namespace testing;
 using namespace Tempest;
 
-MouseEvent mkMEvent(Event::Type t, int x,int y){
-  return MouseEvent(x,y,Event::ButtonLeft,Event::M_NoModifier,0,0,t);
+MouseEvent mkMEvent(Event::Type t, int x,int y, int id=0){
+  return MouseEvent(x,y,Event::ButtonLeft,Event::M_NoModifier,0,id,t);
   }
 
 KeyEvent mkKEvent(Event::KeyType kt, Event::Type t){
@@ -22,6 +22,7 @@ struct TstButton:Button {
   int down=0;
   int up  =0;
   int move=0;
+  int drag=0;
 
   void mouseDownEvent(Tempest::MouseEvent&) override {
     down++;
@@ -32,11 +33,16 @@ struct TstButton:Button {
   void mouseMoveEvent(Tempest::MouseEvent&) override {
     move++;
     }
+  void mouseDragEvent(Tempest::MouseEvent& e) override {
+    drag++;
+    e.ignore();
+    }
 
   void clear() {
     down=0;
     up  =0;
     move=0;
+    drag=0;
     }
   };
 
@@ -79,4 +85,32 @@ TEST(main,EventDispatcher_MouseEvent) {
   EXPECT_EQ(b0.down,1);
   EXPECT_EQ(b0.up,  1);
   EXPECT_EQ(b0.move,1);
+  }
+
+TEST(main,EventDispatcher_MultitouchCapture) {
+  Widget wx;
+  wx.resize(1000,50);
+  wx.setLayout(Vertical);
+
+  EventDispatcher dis(wx);
+  TstButton& b0=wx.addWidget(new TstButton());
+  wx.addWidget(new TstButton());
+
+  auto down0 = mkMEvent(Event::MouseDown,11,22,0);
+  auto down1 = mkMEvent(Event::MouseDown,12,22,1);
+  dis.dispatchMouseDown(wx,down0);
+  dis.dispatchMouseDown(wx,down1);
+  EXPECT_EQ(b0.down,2);
+
+  auto up0 = mkMEvent(Event::MouseUp,11,22,0);
+  dis.dispatchMouseUp(wx,up0);
+  EXPECT_EQ(b0.up,1);
+
+  auto move1 = mkMEvent(Event::MouseMove,13,22,1);
+  dis.dispatchMouseMove(wx,move1);
+  EXPECT_EQ(b0.drag,1);
+
+  auto up1 = mkMEvent(Event::MouseUp,13,22,1);
+  dis.dispatchMouseUp(wx,up1);
+  EXPECT_EQ(b0.up,2);
   }

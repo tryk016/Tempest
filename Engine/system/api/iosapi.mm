@@ -358,6 +358,8 @@ static TempestWindow* attachWindowToScene(UIWindowScene* windowScene) {
     mainWindow = [[TempestWindow alloc] initWithWindowScene:windowScene];
     ViewController* controller = [[ViewController alloc] init];
     mainWindow.rootViewController = controller;
+    mainWindow.multipleTouchEnabled = YES;
+    controller.view.multipleTouchEnabled = YES;
     [controller release];
     mainWindow.autoresizingMask = UIViewAutoresizingFlexibleWidth |
                                   UIViewAutoresizingFlexibleHeight;
