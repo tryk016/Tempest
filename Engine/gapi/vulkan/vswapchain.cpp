@@ -22,6 +22,10 @@
 #  include <vulkan/vulkan_xlib.h>
 #  undef Always
 #  undef None
+#elif defined(__ANDROID__)
+#  define VK_USE_PLATFORM_ANDROID_KHR
+#  include <android/native_window.h>
+#  include <vulkan/vulkan_android.h>
 #else
 #  error "WSI is not implemented on this platform"
 #endif
@@ -175,6 +179,8 @@ bool VSwapchain::checkPresentSupport(VkPhysicalDevice device, uint32_t queueFami
     auto visualId = XVisualIDFromVisual(DefaultVisual(dpy,screen));
     presentSupport = vkGetPhysicalDeviceXlibPresentationSupportKHR(device,queueFamilyIndex,dpy,visualId)!=VK_FALSE;
     }
+#elif defined(__ANDROID__)
+  const bool presentSupport = true; // Android: all graphics-capable queues can present to a surface
 #else
 #warning "wsi for vulkan not implemented on this platform"
 #endif
@@ -244,6 +250,12 @@ VkSurfaceKHR VSwapchain::createSurface(VkInstance instance, void* hwnd) {
   createInfo.dpy    = reinterpret_cast<Display*>(X11Api::display());
   createInfo.window = ::Window(hwnd);
   if(vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &ret)!=VK_SUCCESS)
+    throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+#elif defined(__ANDROID__)
+  VkAndroidSurfaceCreateInfoKHR createInfo = {};
+  createInfo.sType  = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+  createInfo.window = reinterpret_cast<ANativeWindow*>(hwnd);
+  if(vkCreateAndroidSurfaceKHR(instance, &createInfo, nullptr, &ret)!=VK_SUCCESS)
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 #else
 #warning "wsi for vulkan not implemented on this platform"
