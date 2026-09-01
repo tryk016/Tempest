@@ -128,7 +128,6 @@ namespace Tempest {
     DXT5,
     R11G11B10UF,
     RGBA16F,
-    RG16F,
     Last
     };
 
@@ -160,7 +159,6 @@ namespace Tempest {
       case DXT5:        return "DXT5";
       case R11G11B10UF: return "R11G11B10UF";
       case RGBA16F:     return "RGBA16F";
-      case RG16F:       return "RG16F";
       case Last:
         break;
       }

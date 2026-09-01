@@ -103,12 +103,6 @@ TEST(VulkanApi,Draw) {
 #endif
   }
 
-TEST(VulkanApi,RG16F) {
-#if !defined(__OSX__)
-  GapiTestCommon::FormatRG16F<VulkanApi>();
-#endif
-  }
-
 TEST(VulkanApi,DepthWrite) {
 #if !defined(__OSX__)
   GapiTestCommon::DepthWrite<VulkanApi>("VulkanApi_DepthWrite.png");
