@@ -104,8 +104,12 @@ void MtCommandBuffer::beginRendering(const FrameBufferDesc& fbo, size_t fboSize,
       auto frame = s.acquireRenderTarget(fbo.imgId[i]);
       clr->setTexture(frame->texture.get());
       bool known = false;
-      for(auto& existing:swapchainFrames)
-        known = known || existing.get()==frame.get();
+      for(auto& existing:swapchainFrames) {
+        if(existing.get()!=frame.get())
+          continue;
+        known = true;
+        break;
+        }
       if(!known)
         swapchainFrames.push_back(std::move(frame));
       curFbo.colorFormat[curFbo.numColors] = s.format();
