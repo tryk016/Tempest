@@ -39,7 +39,6 @@ inline MTL::ResourceOptions hostVisibleResourceOptions(MTL::Device& dev) {
            ? MTL::ResourceStorageModeShared
            : MTL::ResourceStorageModeManaged;
   }
-
 inline MTL::PixelFormat nativeFormat(TextureFormat frm) {
   switch(frm) {
     case Undefined:
