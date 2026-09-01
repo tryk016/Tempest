@@ -9,6 +9,7 @@
 #include <vector>
 #include <cstring>
 #include <cassert>
+#include <limits>
 
 using namespace Tempest;
 
@@ -34,6 +35,18 @@ struct Pixmap::Impl {
     if(!data)
       throw std::bad_alloc();
     std::memset(data,0,dataSz);
+    }
+
+  Impl(const void* src, size_t srcSize, uint32_t w, uint32_t h,
+       uint32_t mipCnt, TextureFormat frm)
+      :w(w),h(h),dataSz(srcSize),frm(frm),mipCnt(mipCnt) {
+    const size_t expected = calcDataSize(w,h,mipCnt,frm);
+    if(src==nullptr || expected==0 || expected!=srcSize)
+      throw std::system_error(Tempest::SystemErrc::UnableToLoadAsset);
+    data = reinterpret_cast<uint8_t*>(std::malloc(dataSz));
+    if(!data)
+      throw std::bad_alloc();
+    std::memcpy(data,src,dataSz);
     }
 
   Impl(const Impl& other):w(other.w),h(other.h),dataSz(other.dataSz),frm(other.frm),mipCnt(other.mipCnt){
@@ -63,6 +76,8 @@ struct Pixmap::Impl {
 
     if(isCompressed(other.frm)) {
       assert(frm==TextureFormat::RGB8 || frm==TextureFormat::RGBA8); // rest is handled outside of this function
+      if(other.frm==TextureFormat::ASTC4x4)
+        throw std::system_error(Tempest::GraphicsErrc::UnsupportedTextureFormat, "ASTC4x4 conversion");
       static const int kfrm[] = {squish::kDxt1,squish::kDxt3,squish::kDxt5};
       if(frm==TextureFormat::RGB8)
         ddsToRgba(data,other.data,w,h,kfrm[uint8_t(other.frm)-uint8_t(TextureFormat::DXT1)],3); else
@@ -140,9 +155,40 @@ struct Pixmap::Impl {
     }
 
   static size_t calcDataSize(uint32_t w, uint32_t h, TextureFormat frm) {
-    auto bsz = blockCount(frm,w,h);
-    auto bpb = blockSizeForFormat(frm);
-    return size_t(bsz.w)*size_t(bsz.h)*size_t(bpb);
+    const size_t bpb = blockSizeForFormat(frm);
+    if(w==0 || h==0 || bpb==0)
+      return 0;
+
+    const size_t bw = isCompressed(frm) ? size_t(w/4)+(w%4!=0) : size_t(w);
+    const size_t bh = isCompressed(frm) ? size_t(h/4)+(h%4!=0) : size_t(h);
+    if(bw>std::numeric_limits<size_t>::max()/bh)
+      return 0;
+    const size_t blocks = bw*bh;
+    if(blocks>std::numeric_limits<size_t>::max()/bpb)
+      return 0;
+    return blocks*bpb;
+    }
+
+  static size_t calcDataSize(uint32_t w, uint32_t h, uint32_t mipCnt, TextureFormat frm) {
+    if(w==0 || h==0 || mipCnt==0 || frm==TextureFormat::Undefined || frm==TextureFormat::Last)
+      return 0;
+
+    uint32_t maxMips = 1;
+    for(uint32_t s=std::max(w,h); s>1; s/=2)
+      ++maxMips;
+    if(mipCnt>maxMips)
+      return 0;
+
+    size_t total = 0;
+    for(uint32_t i=0; i<mipCnt; ++i) {
+      const size_t level = calcDataSize(w,h,frm);
+      if(level==0 || level>std::numeric_limits<size_t>::max()-total)
+        return 0;
+      total += level;
+      w = std::max<uint32_t>(1,w/2);
+      h = std::max<uint32_t>(1,h/2);
+      }
+    return total;
     }
 
   static std::unique_ptr<Impl,Deleter> convert(const Impl& other, TextureFormat frm) {
@@ -250,6 +296,7 @@ struct Pixmap::Impl {
       case TextureFormat::DXT1:    return 0;
       case TextureFormat::DXT3:    return 0;
       case TextureFormat::DXT5:    return 0;
+      case TextureFormat::ASTC4x4: return 0;
       //---
       default:
         return uint8_t(Pixmap::bppForFormat(frm)/Pixmap::componentCount(frm));
@@ -259,7 +306,8 @@ struct Pixmap::Impl {
   static bool isCompressed(TextureFormat frm) {
     return frm==TextureFormat::DXT1 ||
            frm==TextureFormat::DXT3 ||
-           frm==TextureFormat::DXT5;
+           frm==TextureFormat::DXT5 ||
+           frm==TextureFormat::ASTC4x4;
     }
 
   void save(ODevice& f,const char* ext){
@@ -311,6 +359,11 @@ Pixmap::Pixmap(const Pixmap &src, TextureFormat conv)
 
 Pixmap::Pixmap(uint32_t w, uint32_t h, TextureFormat frm)
   :impl(new Impl(w,h,frm)){
+  }
+
+Pixmap::Pixmap(const void* data, size_t dataSize, uint32_t w, uint32_t h,
+               uint32_t mipCount, TextureFormat frm)
+  :impl(new Impl(data,dataSize,w,h,mipCount,frm)){
   }
 
 Pixmap::Pixmap(const char* path) {
@@ -452,6 +505,7 @@ size_t Pixmap::blockSizeForFormat(TextureFormat frm) {
     case TextureFormat::DXT1:        return 8;
     case TextureFormat::DXT3:        return 16;
     case TextureFormat::DXT5:        return 16;
+    case TextureFormat::ASTC4x4:     return 16;
     //---
     case TextureFormat::R11G11B10UF: return 4;
     case TextureFormat::RGBA16F:     return 8;
@@ -492,6 +546,7 @@ uint8_t Pixmap::componentCount(TextureFormat frm) {
     case TextureFormat::DXT1:        return 3;
     case TextureFormat::DXT3:        return 4;
     case TextureFormat::DXT5:        return 4;
+    case TextureFormat::ASTC4x4:     return 4;
     //---
     case TextureFormat::R11G11B10UF: return 3;
     case TextureFormat::RGBA16F:     return 4;
@@ -530,7 +585,8 @@ Size Pixmap::blockCount(TextureFormat frm, uint32_t w, uint32_t h) {
     case TextureFormat::DXT1:
     case TextureFormat::DXT3:
     case TextureFormat::DXT5:
-      return Size((w+3)/4,(h+3)/4);
+    case TextureFormat::ASTC4x4:
+      return Size(int(w/4+(w%4!=0)),int(h/4+(h%4!=0)));
       break;
     }
   return Size(0,0);

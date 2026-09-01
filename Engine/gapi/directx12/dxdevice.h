@@ -121,6 +121,8 @@ inline DXGI_FORMAT nativeFormat(TextureFormat f) {
       return DXGI_FORMAT_R11G11B10_FLOAT;
     case TextureFormat::RGBA16F:
       return DXGI_FORMAT_R16G16B16A16_FLOAT;
+    case TextureFormat::ASTC4x4:
+      return DXGI_FORMAT_UNKNOWN;
     }
   return DXGI_FORMAT_UNKNOWN;
   }

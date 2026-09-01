@@ -200,6 +200,7 @@ uint8_t* PixmapCodecCommon::load(PixmapCodec::Context &ctx, uint32_t &ow, uint32
     case TextureFormat::DXT1:
     case TextureFormat::DXT3:
     case TextureFormat::DXT5:
+    case TextureFormat::ASTC4x4:
       // not supported by common codec
       throw std::system_error(Tempest::SystemErrc::UnableToLoadAsset);
     }
@@ -256,6 +257,7 @@ bool PixmapCodecCommon::save(ODevice &f, const char *ext, const uint8_t* cdata,
     case TextureFormat::DXT1:
     case TextureFormat::DXT3:
     case TextureFormat::DXT5:
+    case TextureFormat::ASTC4x4:
       break;
     case TextureFormat::R11G11B10UF:
     case TextureFormat::RGBA16F:

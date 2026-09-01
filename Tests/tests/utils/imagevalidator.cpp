@@ -59,6 +59,7 @@ ImageValidator::Pixel ImageValidator::at(uint32_t x, uint32_t y) const {
     case TextureFormat::DXT1:
     case TextureFormat::DXT3:
     case TextureFormat::DXT5:
+    case TextureFormat::ASTC4x4:
       assert(false);
       break;
 

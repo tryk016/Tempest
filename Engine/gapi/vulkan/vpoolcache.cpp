@@ -41,7 +41,13 @@ void VPoolCache::setupLimits() {
     properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
     properties.pNext = &rtas;
 
-    auto vkGetPhysicalDeviceProperties2 = PFN_vkGetPhysicalDeviceProperties2(vkGetInstanceProcAddr(dev.instance,"vkGetPhysicalDeviceProperties2KHR"));
+    auto vkGetPhysicalDeviceProperties2 = PFN_vkGetPhysicalDeviceProperties2(
+      vkGetInstanceProcAddr(dev.instance,"vkGetPhysicalDeviceProperties2"));
+    if(vkGetPhysicalDeviceProperties2==nullptr)
+      vkGetPhysicalDeviceProperties2 = PFN_vkGetPhysicalDeviceProperties2(
+        vkGetInstanceProcAddr(dev.instance,"vkGetPhysicalDeviceProperties2KHR"));
+    if(vkGetPhysicalDeviceProperties2==nullptr)
+      throw std::system_error(Tempest::GraphicsErrc::NoDevice);
     vkGetPhysicalDeviceProperties2(dev.physicalDevice, &properties);
 
     limits   = properties.properties.limits;
@@ -199,9 +205,6 @@ VkDescriptorPool VPoolCache::allocPool(const LayoutDesc &l) {
   poolInfo.flags         = 0;
   poolInfo.poolSizeCount = uint32_t(pSize);
   poolInfo.pPoolSizes    = poolSize;
-
-  if(l.isUpdateAfterBind())
-    poolInfo.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 
   VkDevice dev = this->dev.device.impl;
   VkDescriptorPool ret = VK_NULL_HANDLE;

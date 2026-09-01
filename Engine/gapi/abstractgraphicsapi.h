@@ -128,6 +128,7 @@ namespace Tempest {
     DXT5,
     R11G11B10UF,
     RGBA16F,
+    ASTC4x4,
     Last
     };
 
@@ -159,6 +160,7 @@ namespace Tempest {
       case DXT5:        return "DXT5";
       case R11G11B10UF: return "R11G11B10UF";
       case RGBA16F:     return "RGBA16F";
+      case ASTC4x4:     return "ASTC4x4";
       case Last:
         break;
       }
@@ -170,7 +172,8 @@ namespace Tempest {
     }
 
   inline bool isCompressedFormat(TextureFormat f){
-    return f==TextureFormat::DXT1 || f==TextureFormat::DXT3 || f==TextureFormat::DXT5;
+    return f==TextureFormat::DXT1 || f==TextureFormat::DXT3 ||
+           f==TextureFormat::DXT5 || f==TextureFormat::ASTC4x4;
     }
 
   enum class ComponentSwizzle {

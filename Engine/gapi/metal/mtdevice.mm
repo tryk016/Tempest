@@ -276,6 +276,8 @@ void MtDevice::deductProps(AbstractGraphicsApi::Props& prop, MTL::Device& dev) {
     for(auto& i:bc)
       smpBit |= uint64_t(1) << uint64_t(i);
     }
+  if(dev.supportsFamily(MTL::GPUFamilyApple1))
+    smpBit |= uint64_t(1) << uint64_t(TextureFormat::ASTC4x4);
   
 #ifdef __OSX__
   if(dev.depth24Stencil8PixelFormatSupported()) {

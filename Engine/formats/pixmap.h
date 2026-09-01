@@ -15,6 +15,8 @@ class Pixmap final {
     Pixmap();
     Pixmap(const Pixmap& src, TextureFormat conv);
     Pixmap(uint32_t w, uint32_t h, TextureFormat frm);
+    Pixmap(const void* data, size_t dataSize, uint32_t w, uint32_t h,
+           uint32_t mipCount, TextureFormat frm);
     Pixmap(const char*         path);
     Pixmap(std::string_view    path);
     Pixmap(const char16_t*     path);

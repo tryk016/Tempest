@@ -102,6 +102,8 @@ inline VkFormat nativeFormat(TextureFormat f) {
       return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
     case TextureFormat::RGBA16F:
       return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case TextureFormat::ASTC4x4:
+      return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
     }
   return VK_FORMAT_UNDEFINED;
   }
@@ -351,8 +353,10 @@ class VDevice : public AbstractGraphicsApi::Device {
       bool     hasDeviceAddress   = false;
       bool     hasDynRendering    = false;
       bool     hasDescIndexing    = false;
+      bool     hasDescIndexingExt = false;
       bool     hasBarycentrics    = false;
       bool     hasSpirv_1_4       = false;
+      bool     hasSpirv_1_4Ext    = false;
       bool     hasDebugMarker     = false;
       bool     hasRobustness2     = false;
       bool     hasStoreOpNone     = false;

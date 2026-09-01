@@ -46,7 +46,8 @@ void TextureAtlas::emplace(TextureAtlas::Allocation &dest, const void* img,
       break;
     case TextureFormat::DXT1:
     case TextureFormat::DXT3:
-    case TextureFormat::DXT5:{
+    case TextureFormat::DXT5:
+    case TextureFormat::ASTC4x4: {
       Log::d("compressed sprites are not implemented");
       break;
       }

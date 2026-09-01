@@ -28,6 +28,13 @@ VSetLayoutCache::~VSetLayoutCache() {
   }
 
 VkDescriptorSetLayout VSetLayoutCache::findLayout(const ShaderReflection::LayoutDesc& l) {
+  if(l.runtime!=0 &&
+     !dev.props.descriptors.nonUniformIndexing &&
+     !dev.props.hasDescriptorHeap) {
+    throw std::system_error(Tempest::GraphicsErrc::UnsupportedExtension,
+                            "descriptor indexing");
+    }
+
   std::lock_guard<std::mutex> guard(syncLay);
   for(auto& i:layouts) {
     if(!compare(i.desc,l))
@@ -71,9 +78,8 @@ VkDescriptorSetLayout VSetLayoutCache::findLayout(const ShaderReflection::Layout
   info.bindingCount = count;
   info.pBindings    = bind;
 
-  if(l.isUpdateAfterBind()) {
+  if(l.runtime!=0) {
     info.pNext  = &bindingFlags;
-    info.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     }
 
   try {

@@ -60,7 +60,6 @@ void VDescriptorArray::alloc(VkDescriptorSetLayout lay, VDevice &dev, ShaderRefl
   poolInfo.flags         = 0; // VK_DESCRIPTOR_POOL_CREATE_HOST_ONLY_BIT_EXT;
   poolInfo.poolSizeCount = 1;
   poolInfo.pPoolSizes    = &poolSize;
-  poolInfo.flags         = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
   vkAssert(vkCreateDescriptorPool(dev.device.impl, &poolInfo, nullptr, &pool));
 
   VkDescriptorSetAllocateInfo allocInfo = {};

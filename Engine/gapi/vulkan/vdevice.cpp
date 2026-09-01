@@ -44,6 +44,24 @@ static bool extensionSupport(const std::vector<VkExtensionProperties>& list, con
   return false;
   }
 
+static PFN_vkGetPhysicalDeviceFeatures2 getPhysicalDeviceFeatures2(VkInstance instance) {
+  auto fn = PFN_vkGetPhysicalDeviceFeatures2(
+              vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceFeatures2"));
+  if(fn==nullptr)
+    fn = PFN_vkGetPhysicalDeviceFeatures2(
+           vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceFeatures2KHR"));
+  return fn;
+  }
+
+static PFN_vkGetPhysicalDeviceProperties2 getPhysicalDeviceProperties2(VkInstance instance) {
+  auto fn = PFN_vkGetPhysicalDeviceProperties2(
+              vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceProperties2"));
+  if(fn==nullptr)
+    fn = PFN_vkGetPhysicalDeviceProperties2(
+           vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceProperties2KHR"));
+  return fn;
+  }
+
 
 const std::initializer_list<const char*> VDevice::requiredExtensions = {
   VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -150,8 +168,9 @@ void VDevice::createLogicalDevice(VkPhysicalDevice pdev) {
   if(props.hasDeviceAddress) {
     rqExt.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
     }
-  if(props.hasSpirv_1_4) {
+  if(props.hasSpirv_1_4Ext) {
     rqExt.push_back(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+    rqExt.push_back(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
     }
   if(props.raytracing.rayQuery) {
     rqExt.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
@@ -161,7 +180,7 @@ void VDevice::createLogicalDevice(VkPhysicalDevice pdev) {
   if(props.meshlets.meshShader) {
     rqExt.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     }
-  if(props.hasDescIndexing) {
+  if(props.hasDescIndexingExt) {
     rqExt.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     }
   if(props.hasDynRendering) {
@@ -194,11 +213,12 @@ void VDevice::createLogicalDevice(VkPhysicalDevice pdev) {
   vkGetPhysicalDeviceFeatures(pdev,&supportedFeatures);
 
   VkPhysicalDeviceFeatures deviceFeatures = {};
-  deviceFeatures.samplerAnisotropy    = supportedFeatures.samplerAnisotropy;
-  deviceFeatures.textureCompressionBC = supportedFeatures.textureCompressionBC;
-  deviceFeatures.tessellationShader   = supportedFeatures.tessellationShader;
-  deviceFeatures.geometryShader       = supportedFeatures.geometryShader;
-  deviceFeatures.fillModeNonSolid     = supportedFeatures.fillModeNonSolid;
+  deviceFeatures.samplerAnisotropy          = supportedFeatures.samplerAnisotropy;
+  deviceFeatures.textureCompressionBC       = supportedFeatures.textureCompressionBC;
+  deviceFeatures.textureCompressionASTC_LDR = supportedFeatures.textureCompressionASTC_LDR;
+  deviceFeatures.tessellationShader         = supportedFeatures.tessellationShader;
+  deviceFeatures.geometryShader             = supportedFeatures.geometryShader;
+  deviceFeatures.fillModeNonSolid           = supportedFeatures.fillModeNonSolid;
 
   deviceFeatures.vertexPipelineStoresAndAtomics = supportedFeatures.vertexPipelineStoresAndAtomics;
   deviceFeatures.fragmentStoresAndAtomics       = supportedFeatures.fragmentStoresAndAtomics;
@@ -299,7 +319,9 @@ void VDevice::createLogicalDevice(VkPhysicalDevice pdev) {
       features.pNext = &dheapFeatures;
       }
 
-    auto vkGetPhysicalDeviceFeatures2 = PFN_vkGetPhysicalDeviceFeatures2(vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceFeatures2KHR"));
+    auto vkGetPhysicalDeviceFeatures2 = getPhysicalDeviceFeatures2(instance);
+    if(vkGetPhysicalDeviceFeatures2==nullptr)
+      throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 
     vkGetPhysicalDeviceFeatures2(pdev, &features);
     bdaFeatures.bufferDeviceAddressCaptureReplay  = VK_FALSE;
@@ -387,6 +409,8 @@ void VDevice::createLogicalDevice(VkPhysicalDevice pdev) {
 
 void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, VkPhysicalDevice physicalDevice, VkProps& props) {
   const auto ext = extensionsList(physicalDevice);
+  VkPhysicalDeviceProperties coreProps = {};
+  vkGetPhysicalDeviceProperties(physicalDevice,&coreProps);
   if(extensionSupport(ext,VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME))
     props.hasMemRq2 = true;
   if(extensionSupport(ext,VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME))
@@ -395,9 +419,12 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
     props.hasSync2 = true;
   if(hasDeviceFeatures2 && extensionSupport(ext,VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
     props.hasDeviceAddress = true;
-  if(hasDeviceFeatures2 && extensionSupport(ext,VK_KHR_SPIRV_1_4_EXTENSION_NAME)) {
-    props.hasSpirv_1_4 = true;
-    }
+  const bool hasSpirv14Ext = extensionSupport(ext,VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+  const bool hasFloatControlsExt = extensionSupport(ext,VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+  const bool hasSpirv14Core = coreProps.apiVersion>=VK_API_VERSION_1_2;
+  props.hasSpirv_1_4 = hasDeviceFeatures2 &&
+                       (hasSpirv14Core || (hasSpirv14Ext && hasFloatControlsExt));
+  props.hasSpirv_1_4Ext = props.hasSpirv_1_4 && !hasSpirv14Core;
   if(hasDeviceFeatures2 &&
      extensionSupport(ext,VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
      extensionSupport(ext,VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) &&
@@ -407,8 +434,13 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
   if(hasDeviceFeatures2 && extensionSupport(ext,VK_EXT_MESH_SHADER_EXTENSION_NAME)) {
     props.meshlets.meshShader = true;
     }
-  if(hasDeviceFeatures2 && extensionSupport(ext,VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME)) {
-    props.hasDescIndexing = true;
+  props.hasDescIndexingExt = extensionSupport(ext,VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+  if(hasDeviceFeatures2) {
+    // VK_EXT_descriptor_indexing was promoted to Vulkan 1.2. A conforming
+    // 1.2+ implementation may expose the core features without advertising
+    // the old extension name, so capability and extension-request decisions
+    // must stay separate.
+    props.hasDescIndexing = props.hasDescIndexingExt || coreProps.apiVersion>=VK_API_VERSION_1_2;
     }
   if(hasDeviceFeatures2 && extensionSupport(ext,VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
     props.hasDynRendering = true;
@@ -463,11 +495,12 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
   vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
 
   VkPhysicalDeviceFeatures deviceFeatures = {};
-  deviceFeatures.samplerAnisotropy    = supportedFeatures.samplerAnisotropy;
-  deviceFeatures.textureCompressionBC = supportedFeatures.textureCompressionBC;
-  deviceFeatures.tessellationShader   = supportedFeatures.tessellationShader;
-  deviceFeatures.geometryShader       = supportedFeatures.geometryShader;
-  deviceFeatures.fillModeNonSolid     = supportedFeatures.fillModeNonSolid;
+  deviceFeatures.samplerAnisotropy          = supportedFeatures.samplerAnisotropy;
+  deviceFeatures.textureCompressionBC       = supportedFeatures.textureCompressionBC;
+  deviceFeatures.textureCompressionASTC_LDR = supportedFeatures.textureCompressionASTC_LDR;
+  deviceFeatures.tessellationShader         = supportedFeatures.tessellationShader;
+  deviceFeatures.geometryShader             = supportedFeatures.geometryShader;
+  deviceFeatures.fillModeNonSolid           = supportedFeatures.fillModeNonSolid;
 
   deviceFeatures.vertexPipelineStoresAndAtomics = supportedFeatures.vertexPipelineStoresAndAtomics;
   deviceFeatures.fragmentStoresAndAtomics       = supportedFeatures.fragmentStoresAndAtomics;
@@ -517,9 +550,6 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
     VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
     indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
 
-    VkPhysicalDeviceDescriptorIndexingProperties indexingProps = {};
-    indexingProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
-
     VkPhysicalDeviceRobustness2PropertiesEXT rebustness2Props = {};
     rebustness2Props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_PROPERTIES_EXT;
 
@@ -565,9 +595,6 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
     if(props.hasDescIndexing) {
       indexingFeatures.pNext = features.pNext;
       features.pNext = &indexingFeatures;
-
-      indexingProps.pNext = properties.pNext;
-      properties.pNext = &indexingProps;
       }
     if(props.hasRobustness2) {
       rebustness2Props.pNext = properties.pNext;
@@ -585,8 +612,10 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
       properties.pNext = &dheapProps;
       }
 
-    auto vkGetPhysicalDeviceFeatures2   = PFN_vkGetPhysicalDeviceFeatures2  (vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceFeatures2KHR"));
-    auto vkGetPhysicalDeviceProperties2 = PFN_vkGetPhysicalDeviceProperties2(vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceProperties2KHR"));
+    auto vkGetPhysicalDeviceFeatures2   = getPhysicalDeviceFeatures2(instance);
+    auto vkGetPhysicalDeviceProperties2 = getPhysicalDeviceProperties2(instance);
+    if(vkGetPhysicalDeviceFeatures2==nullptr || vkGetPhysicalDeviceProperties2==nullptr)
+      throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 
     vkGetPhysicalDeviceFeatures2  (physicalDevice, &features);
     vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
@@ -615,21 +644,7 @@ void VDevice::deviceProps(VkInstance instance, const bool hasDeviceFeatures2, Vk
           (indexingFeatures.shaderSampledImageArrayNonUniformIndexing ==VK_TRUE) &&
           (indexingFeatures.shaderStorageBufferArrayNonUniformIndexing==VK_TRUE);
       props.descriptors.nonUniformIndexing &=
-        (indexingFeatures.descriptorBindingSampledImageUpdateAfterBind ==VK_TRUE) &&
-        (indexingFeatures.descriptorBindingStorageBufferUpdateAfterBind==VK_TRUE);
-      }
-
-    if(indexingFeatures.runtimeDescriptorArray!=VK_FALSE && !props.hasDescriptorHeap) {
-      props.descriptors.maxSamplers = std::max(indexingProps.maxDescriptorSetUpdateAfterBindSamplers,
-                                               indexingProps.maxPerStageDescriptorUpdateAfterBindSamplers);
-
-      props.descriptors.maxTexture  = std::max(indexingProps.maxDescriptorSetUpdateAfterBindSampledImages,
-                                               indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages);
-
-      props.descriptors.maxStorage  = max(indexingProps.maxDescriptorSetUpdateAfterBindStorageBuffers,
-                                          indexingProps.maxPerStageDescriptorUpdateAfterBindStorageBuffers,
-                                          indexingProps.maxDescriptorSetUpdateAfterBindStorageImages,
-                                          indexingProps.maxPerStageDescriptorUpdateAfterBindStorageImages);
+        (indexingFeatures.descriptorBindingPartiallyBound==VK_TRUE);
       }
 
     if(asFeatures.descriptorBindingAccelerationStructureUpdateAfterBind!=VK_FALSE) {

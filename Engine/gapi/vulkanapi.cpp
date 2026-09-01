@@ -19,6 +19,8 @@
 
 #include <libspirv/libspirv.h>
 
+#include <algorithm>
+
 using namespace Tempest;
 using namespace Tempest::Detail;
 
@@ -110,9 +112,11 @@ struct Tempest::VulkanApi::Impl {
     appInfo.apiVersion         = VK_API_VERSION_1_0;
 
     if(auto vkEnumerateInstanceVersion = PFN_vkEnumerateInstanceVersion(vkGetInstanceProcAddr(nullptr,"vkEnumerateInstanceVersion"))) {
-      (void)vkEnumerateInstanceVersion;
-      appInfo.apiVersion = VK_API_VERSION_1_3;
+      uint32_t loaderVersion = VK_API_VERSION_1_0;
+      if(vkEnumerateInstanceVersion(&loaderVersion)==VK_SUCCESS)
+        appInfo.apiVersion = std::min(loaderVersion,VK_API_VERSION_1_3);
       }
+    hasDeviceFeatures2 = appInfo.apiVersion>=VK_API_VERSION_1_1;
 
     VkInstanceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -135,7 +139,8 @@ struct Tempest::VulkanApi::Impl {
     if(hasDebugReport)
       rqExt.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 
-    if(extensionSupport(ext, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
+    if(!hasDeviceFeatures2 &&
+       extensionSupport(ext,VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
       rqExt.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
       hasDeviceFeatures2 = true;
       }
