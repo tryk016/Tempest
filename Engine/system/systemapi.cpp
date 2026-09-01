@@ -4,6 +4,9 @@
 #include "api/x11api.h"
 #include "api/macosapi.h"
 #include "api/iosapi.h"
+#if defined(__ANDROID__)
+#include "api/androidapi.h"
+#endif
 #include "eventdispatcher.h"
 
 #include <Tempest/Event>
@@ -96,7 +99,9 @@ uint16_t SystemApi::translateKey(uint64_t scancode) {
   }
 
 SystemApi& SystemApi::inst() {
- #ifdef __WINDOWS__
+#if defined(__ANDROID__)
+  static AndroidApi api;
+#elif defined(__WINDOWS__)
   static WindowsApi api;
 #elif defined(__UNIX__)
   static X11Api api;
