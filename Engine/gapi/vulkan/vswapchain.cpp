@@ -27,6 +27,7 @@
 #  define VK_USE_PLATFORM_ANDROID_KHR
 #  include <android/native_window.h>
 #  include <vulkan/vulkan_android.h>
+#  include "system/api/androidapi.h"
 #else
 #  error "WSI is not implemented on this platform"
 #endif
@@ -108,6 +109,8 @@ VSwapchain::FenceList::~FenceList() {
   }
 
 void VSwapchain::FenceList::waitAll() {
+  if(dev==VK_NULL_HANDLE || size==0)
+    return;
   vkWaitForFences(dev, size, data.get(), VK_TRUE,std::numeric_limits<uint64_t>::max());
   }
 
@@ -193,7 +196,27 @@ void VSwapchain::cleanupSwapchain() noexcept {
   aquireFence.waitAll();
   // wait for vkQueuePresent to finish, so we can delete semaphores
   // NOTE: maybe update to VK_KHR_present_wait ?
-  device.presentQueue->waitIdle();
+  if(swapChain!=VK_NULL_HANDLE || !views.empty()) {
+    try {
+      device.graphicsQueue->waitIdle();
+      if(device.presentQueue!=device.graphicsQueue)
+        device.presentQueue->waitIdle();
+      }
+    catch(const std::exception& e) {
+      try {
+        Log::e("Vulkan: unable to idle present queue during swapchain cleanup: ", e.what());
+        }
+      catch(...) {
+        }
+      }
+    catch(...) {
+      try {
+        Log::e("Vulkan: unable to idle present queue during swapchain cleanup");
+        }
+      catch(...) {
+        }
+      }
+    }
   aquireFence  = FenceList();
   presentFence = FenceList();
   aquireSem    = SemaphoreList();
@@ -216,6 +239,8 @@ void VSwapchain::cleanupSwapchain() noexcept {
   swapChain            = VK_NULL_HANDLE;
   swapChainImageFormat = VK_FORMAT_UNDEFINED;
   swapChainExtent      = {};
+  imgIndex             = 0;
+  frameId              = 0;
   }
 
 void VSwapchain::cleanupSurface() noexcept {
@@ -226,6 +251,14 @@ void VSwapchain::cleanupSurface() noexcept {
 
 void VSwapchain::reset() {
   cleanupSwapchain();
+#if defined(__ANDROID__)
+  // ANativeWindow belongs to GameActivity and is replaced across
+  // TERM_WINDOW/INIT_WINDOW. A VkSurfaceKHR must never outlive that window.
+  cleanupSurface();
+  surface = createSurface(device.instance, hwnd);
+  if(surface==VK_NULL_HANDLE)
+    return;
+#endif
   createSwapchain(device);
   }
 
@@ -234,7 +267,7 @@ void VSwapchain::cleanup() noexcept {
   cleanupSurface();
   }
 
-VkSurfaceKHR VSwapchain::createSurface(VkInstance instance, void* hwnd) {
+VkSurfaceKHR VSwapchain::createSurface(VkInstance instance, SystemApi::Window* hwnd) {
   if(hwnd==nullptr)
     return VK_NULL_HANDLE;
   VkSurfaceKHR ret = VK_NULL_HANDLE;
@@ -253,9 +286,12 @@ VkSurfaceKHR VSwapchain::createSurface(VkInstance instance, void* hwnd) {
   if(vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &ret)!=VK_SUCCESS)
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 #elif defined(__ANDROID__)
+  ANativeWindow* native = AndroidApi::nativeWindow(hwnd);
+  if(native==nullptr)
+    return VK_NULL_HANDLE;
   VkAndroidSurfaceCreateInfoKHR createInfo = {};
   createInfo.sType  = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-  createInfo.window = reinterpret_cast<ANativeWindow*>(hwnd);
+  createInfo.window = native;
   if(vkCreateAndroidSurfaceKHR(instance, &createInfo, nullptr, &ret)!=VK_SUCCESS)
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
 #else
@@ -265,6 +301,8 @@ VkSurfaceKHR VSwapchain::createSurface(VkInstance instance, void* hwnd) {
   }
 
 void VSwapchain::createSwapchain(VDevice& device) {
+  if(surface==VK_NULL_HANDLE)
+    return;
   for(uint32_t attempt=0; ; ++attempt) {
     if(attempt>1) {
       // Window keep changing due to external factor (user resize, KDE animations, etc) - slow down now
@@ -280,8 +318,18 @@ void VSwapchain::createSwapchain(VDevice& device) {
       auto     code     = createSwapchain(device,support,rect,imgCount);
       if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR) {
         cleanupSwapchain();
+#if defined(__ANDROID__)
+        if(attempt>=2)
+          throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+#endif
         continue;
         }
+#if defined(__ANDROID__)
+      if(code==VK_ERROR_SURFACE_LOST_KHR) {
+        cleanupSwapchain();
+        throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+        }
+#endif
       break;
       }
     catch(...) {
@@ -293,6 +341,8 @@ void VSwapchain::createSwapchain(VDevice& device) {
 
 VkResult VSwapchain::createSwapchain(VDevice& device, const SwapChainSupport& swapChainSupport,
                                      const Rect& rect, uint32_t imgCount) {
+  if(surface==VK_NULL_HANDLE)
+    throw std::system_error(Tempest::GraphicsErrc::NoDevice);
   VkBool32 support=false;
   vkGetPhysicalDeviceSurfaceSupportKHR(device.physicalDevice,device.presentQueue->family,surface,&support);
   if(!support)
@@ -457,7 +507,11 @@ uint32_t VSwapchain::findImageCount(const SwapChainSupport& support) const {
 void VSwapchain::acquireNextImage() {
   VkResult code = implAcquireNextImage();
 
-  if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR)
+  if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR
+#if defined(__ANDROID__)
+     || code==VK_ERROR_SURFACE_LOST_KHR
+#endif
+     )
     throw SwapchainSuboptimal();
 
   if(code!=VK_SUCCESS)
@@ -487,7 +541,11 @@ VkResult VSwapchain::implAcquireNextImage() {
                                         aquireFence[frameId],
                                         &id);
 
-  if(code==VK_ERROR_OUT_OF_DATE_KHR) {
+  if(code==VK_ERROR_OUT_OF_DATE_KHR
+#if defined(__ANDROID__)
+     || code==VK_ERROR_SURFACE_LOST_KHR
+#endif
+     ) {
     auto rc = vkxRevertFence(device.device.impl, &aquireFence[frameId]);
     if(rc!=VK_SUCCESS)
       std::terminate(); // unrecoverable
@@ -549,7 +607,11 @@ void VSwapchain::present() {
 
   auto tx = Application::tickCount();
   VkResult code = device.presentQueue->present(presentInfo);
-  if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR)
+  if(code==VK_ERROR_OUT_OF_DATE_KHR || code==VK_SUBOPTIMAL_KHR
+#if defined(__ANDROID__)
+     || code==VK_ERROR_SURFACE_LOST_KHR
+#endif
+     )
     throw SwapchainSuboptimal();
   tx = Application::tickCount()-tx;
   if(tx > 2) {
@@ -566,4 +628,3 @@ void VSwapchain::present() {
   }
 
 #endif
-

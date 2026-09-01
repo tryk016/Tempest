@@ -2,8 +2,6 @@
 
 #include <Tempest/SystemApi>
 
-#include <functional>
-
 struct android_app;
 struct ANativeWindow;
 
@@ -12,15 +10,11 @@ namespace Tempest {
 class AndroidApi final: SystemApi {
   public:
     using SystemApi::dispatchRender;
+    using SystemApi::dispatchMouseUp;
+    using SystemApi::dispatchResize;
 
     static void setAndroidApp(android_app* app);
-
-    // Registered after the initial swapchain exists. The destroy callback is
-    // synchronous: it runs before GameActivity releases the ANativeWindow.
-    // The create callback receives the new native window so the caller can
-    // rebuild the VkSurfaceKHR as well as the swapchain images.
-    static void setSurfaceCallbacks(std::function<void()> onSurfaceDestroyed,
-                                    std::function<void(SystemApi::Window*)> onSurfaceCreated);
+    static ANativeWindow* nativeWindow(SystemApi::Window* window) noexcept;
 
   private:
     AndroidApi();

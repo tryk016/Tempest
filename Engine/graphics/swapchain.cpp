@@ -12,6 +12,10 @@ Swapchain::Swapchain(AbstractGraphicsApi::Swapchain* sw)
 
 void Swapchain::implReset() {
   size_t cnt = imageCount();
+  if(cnt==0) {
+    img.reset();
+    return;
+    }
   img.reset(new Attachment[cnt]);
   for(uint32_t i=0;i<cnt;++i)
     img[i] = Attachment(impl.handler,i);
@@ -40,6 +44,9 @@ uint32_t Swapchain::h() const {
   }
 
 void Swapchain::reset() {
+  // Drop attachments before the backend invalidates their image views. If
+  // recreation throws, the public swapchain remains safely empty.
+  img.reset();
   impl.handler->reset();
   implReset();
   }

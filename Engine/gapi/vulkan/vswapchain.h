@@ -108,7 +108,7 @@ class VSwapchain : public AbstractGraphicsApi::Swapchain {
     void                     cleanupSurface() noexcept;
     void                     cleanup() noexcept;
 
-    VkSurfaceKHR             createSurface(VkInstance instance, void* hwnd);
+    VkSurfaceKHR             createSurface(VkInstance instance, SystemApi::Window* hwnd);
     void                     createSwapchain(VDevice& device);
     VkResult                 createSwapchain(VDevice& device, const SwapChainSupport& support, const Rect& rect, uint32_t imgCount);
     void                     createImageViews(VDevice &device);
