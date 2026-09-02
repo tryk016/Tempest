@@ -310,9 +310,6 @@ file(GLOB_RECURSE SOURCES
   )
 
 if(APPLE OR IOS)
-  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0)
-  endif()
   enable_language(OBJCXX)
   file(GLOB_RECURSE ObjCSOURCES
     "*.mm"
