@@ -263,7 +263,7 @@ void VCommandBuffer::resetTimestamps(AbstractGraphicsApi::TimestampPool& pool, u
 
 void VCommandBuffer::writeTimestamp(AbstractGraphicsApi::TimestampPool& pool, uint32_t query, GpuTimestampStage stage) {
   auto& p = reinterpret_cast<VTimestampPool&>(pool);
-  const VkPipelineStageFlagBits vkStage = stage==GpuTimestampStage::Begin ?
+  const VkPipelineStageFlagBits vkStage = stage==GpuTimestampStage::TopOfPipe ?
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
   vkCmdWriteTimestamp(impl,vkStage,p.impl,query);
   }

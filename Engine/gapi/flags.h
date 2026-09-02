@@ -33,8 +33,8 @@ enum class BufferHeap : uint8_t {
   };
 
 enum class GpuTimestampStage : uint8_t {
-  Begin,
-  End,
+  TopOfPipe,
+  BottomOfPipe,
   };
 
 // TODO: move away from public header

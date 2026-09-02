@@ -53,8 +53,8 @@ TEST(VulkanApi,GpuTimestamps) {
 
     {
       auto enc = cmd.startEncoding(device);
-      enc.writeTimestamp(timestamps,0,GpuTimestampStage::Begin);
-      enc.writeTimestamp(timestamps,1,GpuTimestampStage::End);
+      enc.writeTimestamp(timestamps,0,GpuTimestampStage::BottomOfPipe);
+      enc.writeTimestamp(timestamps,1,GpuTimestampStage::BottomOfPipe);
     }
 
     auto sync = device.submit(cmd);
