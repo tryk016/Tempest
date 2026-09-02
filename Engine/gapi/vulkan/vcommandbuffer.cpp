@@ -13,6 +13,7 @@
 #include "vtexture.h"
 #include "vframebuffermap.h"
 #include "vaccelerationstructure.h"
+#include "vtimestamppool.h"
 
 using namespace Tempest;
 using namespace Tempest::Detail;
@@ -253,6 +254,18 @@ void VCommandBuffer::end() {
 
 bool VCommandBuffer::isRecording() const {
   return state!=NoRecording;
+  }
+
+void VCommandBuffer::resetTimestamps(AbstractGraphicsApi::TimestampPool& pool, uint32_t first, uint32_t count) {
+  auto& p = reinterpret_cast<VTimestampPool&>(pool);
+  vkCmdResetQueryPool(impl,p.impl,first,count);
+  }
+
+void VCommandBuffer::writeTimestamp(AbstractGraphicsApi::TimestampPool& pool, uint32_t query, GpuTimestampStage stage) {
+  auto& p = reinterpret_cast<VTimestampPool&>(pool);
+  const VkPipelineStageFlagBits vkStage = stage==GpuTimestampStage::Begin ?
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  vkCmdWriteTimestamp(impl,vkStage,p.impl,query);
   }
 
 void VCommandBuffer::beginRendering(const FrameBufferDesc& fbo, size_t fboSize, uint32_t width, uint32_t height) {

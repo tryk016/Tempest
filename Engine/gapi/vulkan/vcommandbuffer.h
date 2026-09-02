@@ -51,6 +51,9 @@ class VCommandBuffer:public AbstractGraphicsApi::CommandBuffer {
     void setScissor (const Rect& r) override;
     void setDebugMarker(std::string_view tag) override;
 
+    void resetTimestamps(AbstractGraphicsApi::TimestampPool& pool, uint32_t first, uint32_t count) override;
+    void writeTimestamp(AbstractGraphicsApi::TimestampPool& pool, uint32_t query, GpuTimestampStage stage) override;
+
     void setPipeline(AbstractGraphicsApi::Pipeline& p) override;
     void setComputePipeline(AbstractGraphicsApi::CompPipeline& p) override;
 

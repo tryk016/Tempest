@@ -15,6 +15,7 @@
 #include <Tempest/StorageBuffer>
 #include <Tempest/StorageImage>
 #include <Tempest/AccelerationStructure>
+#include <Tempest/GpuTimestampPool>
 #include <Tempest/Builtin>
 #include <Tempest/Swapchain>
 #include <Tempest/Except>
@@ -156,6 +157,7 @@ class Device {
 
     ComputePipeline       pipeline(const Shader &comp);
     CommandBuffer         commandBuffer();
+    GpuTimestampPool      gpuTimestampPool(uint32_t count);
     const Builtin&        builtin() const;
 
   private:

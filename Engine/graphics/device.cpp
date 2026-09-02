@@ -74,6 +74,12 @@ Device::Device(AbstractGraphicsApi& api, DeviceType type)
 Device::~Device() {
   }
 
+GpuTimestampPool Device::gpuTimestampPool(uint32_t count) {
+  if(count==0)
+    return GpuTimestampPool();
+  return GpuTimestampPool(api.createTimestampPool(dev,count));
+  }
+
 void Device::waitIdle() {
   impl.dev->waitIdle();
   }

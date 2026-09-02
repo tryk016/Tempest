@@ -564,6 +564,11 @@ namespace Tempest {
         };
       struct BlasBuildCtx {};
       struct AccelerationStructure:Shared {};
+      struct TimestampPool:Shared {
+        virtual uint32_t size() const = 0;
+        virtual bool     tryRead(uint32_t query, uint64_t& value) const = 0;
+        virtual uint64_t elapsedNs(uint64_t begin, uint64_t end) const = 0;
+        };
       struct DescArray:NoCopy {};
       struct BarrierDesc {
         const Texture*   texture   = nullptr;
@@ -611,6 +616,9 @@ namespace Tempest {
         virtual void setScissor (const Rect& r)=0;
         virtual void setDebugMarker(std::string_view tag);
 
+        virtual void resetTimestamps(TimestampPool& pool, uint32_t first, uint32_t count);
+        virtual void writeTimestamp(TimestampPool& pool, uint32_t query, GpuTimestampStage stage);
+
         virtual void draw        (const Buffer* vbo, size_t stride, size_t offset, size_t vertexCount,
                                   size_t firstInstance, size_t instanceCount) = 0;
         virtual void drawIndexed (const Buffer* vbo, size_t stride, size_t voffset,
@@ -631,6 +639,7 @@ namespace Tempest {
       using PPipeline     = Detail::DSharedPtr<Pipeline*>;
       using PCompPipeline = Detail::DSharedPtr<CompPipeline*>;
       using PShader       = Detail::DSharedPtr<Shader*>;
+      using PTimestampPool = Detail::DSharedPtr<TimestampPool*>;
 
       virtual std::vector<Props> devices() const = 0;
 
@@ -643,7 +652,8 @@ namespace Tempest {
 
       virtual PCompPipeline createComputePipeline(Device* d, Shader* shader)=0;
 
-      virtual PShader    createShader(Device *d,const void* source,size_t src_size)=0;
+      virtual PShader       createShader(Device *d,const void* source,size_t src_size)=0;
+      virtual PTimestampPool createTimestampPool(Device* d, uint32_t count);
       virtual CommandBuffer*
                          createCommandBuffer(Device* d)=0;
 

@@ -7,6 +7,7 @@
 #include <Tempest/DescriptorArray>
 #include <Tempest/UniformBuffer>
 #include <Tempest/AccelerationStructure>
+#include <Tempest/GpuTimestampPool>
 
 namespace Tempest {
 
@@ -60,6 +61,9 @@ class Encoder<Tempest::CommandBuffer> {
     void setScissor(const Rect& vp);
 
     void setDebugMarker(std::string_view tag);
+
+    void resetTimestamps(const GpuTimestampPool& pool, uint32_t first, uint32_t count);
+    void writeTimestamp(const GpuTimestampPool& pool, uint32_t query, GpuTimestampStage stage);
 
     // non-indexed + empty vbo
     void draw(std::nullptr_t vbo, size_t offset, size_t count) { implDraw({},0,offset,count,0,1); }

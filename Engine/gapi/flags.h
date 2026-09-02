@@ -32,6 +32,11 @@ enum class BufferHeap : uint8_t {
   Readback = 2,
   };
 
+enum class GpuTimestampStage : uint8_t {
+  Begin,
+  End,
+  };
+
 // TODO: move away from public header
 enum class ResourceLayout : uint32_t {
   None          = 0,

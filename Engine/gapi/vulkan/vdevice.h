@@ -347,6 +347,9 @@ class VDevice : public AbstractGraphicsApi::Device {
 
       uint32_t heapAlignment       = 0;
 
+      float    timestampPeriod     = 0.f;
+      uint32_t timestampValidBits  = 0;
+
       bool     hasMemRq2          = false;
       bool     hasDedicatedAlloc  = false;
       bool     hasSync2           = false;

@@ -85,6 +85,18 @@ void AbstractGraphicsApi::CommandBuffer::setDebugMarker(std::string_view tag) {
   (void)tag;
   }
 
+void AbstractGraphicsApi::CommandBuffer::resetTimestamps(TimestampPool& pool, uint32_t first, uint32_t count) {
+  (void)pool;
+  (void)first;
+  (void)count;
+  }
+
+void AbstractGraphicsApi::CommandBuffer::writeTimestamp(TimestampPool& pool, uint32_t query, GpuTimestampStage stage) {
+  (void)pool;
+  (void)query;
+  (void)stage;
+  }
+
 void AbstractGraphicsApi::CommandBuffer::dispatchMesh(size_t x, size_t y, size_t z) {
   throw std::system_error(Tempest::GraphicsErrc::UnsupportedExtension);
   }
@@ -100,6 +112,12 @@ AbstractGraphicsApi::AccelerationStructure* AbstractGraphicsApi::createBottomAcc
 AbstractGraphicsApi::AccelerationStructure*
   AbstractGraphicsApi::createTopAccelerationStruct(Device* d, const RtInstance* geom, AccelerationStructure*const* as, size_t geomSize) {
   throw std::system_error(Tempest::GraphicsErrc::UnsupportedExtension);
+  }
+
+AbstractGraphicsApi::PTimestampPool AbstractGraphicsApi::createTimestampPool(Device* d, uint32_t count) {
+  (void)d;
+  (void)count;
+  return PTimestampPool();
   }
 
 bool Detail::Bindings::operator ==(const Bindings &other) const {

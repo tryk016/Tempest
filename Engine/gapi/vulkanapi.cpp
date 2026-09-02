@@ -12,6 +12,7 @@
 #include "vulkan/vdescriptorarray.h"
 #include "vulkan/vtexture.h"
 #include "vulkan/vaccelerationstructure.h"
+#include "vulkan/vtimestamppool.h"
 
 #include <Tempest/Pixmap>
 #include <Tempest/Log>
@@ -298,6 +299,13 @@ AbstractGraphicsApi::PCompPipeline VulkanApi::createComputePipeline(AbstractGrap
 AbstractGraphicsApi::PShader VulkanApi::createShader(AbstractGraphicsApi::Device *d, const void* source, size_t src_size) {
   Detail::VDevice* dx=reinterpret_cast<Detail::VDevice*>(d);
   return PShader(new Detail::VShader(*dx,source,src_size));
+  }
+
+AbstractGraphicsApi::PTimestampPool VulkanApi::createTimestampPool(AbstractGraphicsApi::Device* d, uint32_t count) {
+  auto& dx = *reinterpret_cast<Detail::VDevice*>(d);
+  if(count==0 || dx.props.timestampValidBits==0)
+    return PTimestampPool();
+  return PTimestampPool(new Detail::VTimestampPool(dx,count));
   }
 
 AbstractGraphicsApi::PBuffer VulkanApi::createBuffer(AbstractGraphicsApi::Device *d, const void *mem, size_t size,

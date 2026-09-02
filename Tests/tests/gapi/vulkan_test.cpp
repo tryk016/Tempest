@@ -4,9 +4,12 @@
 #include <Tempest/Fence>
 #include <Tempest/Pixmap>
 #include <Tempest/Log>
+#include <Tempest/GpuTimestampPool>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock-matchers.h>
+
+#include <stdexcept>
 
 #include "gapi_test_common.h"
 #include "gapi_test_sync.h"
@@ -17,6 +20,58 @@ using namespace Tempest;
 TEST(VulkanApi,VulkanApi) {
 #if !defined(__OSX__)
   GapiTestCommon::init<VulkanApi>();
+#endif
+  }
+
+TEST(VulkanApi,GpuTimestamps) {
+#if !defined(__OSX__)
+  try {
+    VulkanApi api{ApiFlags::Validation};
+    Device    device(api);
+    auto      timestamps = device.gpuTimestampPool(2);
+    if(timestamps.isEmpty()) {
+      Log::d("Skipping GPU timestamp testcase: unsupported");
+      return;
+      }
+
+    EXPECT_EQ(timestamps.size(),2u);
+    uint64_t invalid = 0;
+    EXPECT_THROW(timestamps.tryRead(2,invalid),std::out_of_range);
+    EXPECT_THROW(timestamps.elapsedNs(0,2,invalid),std::out_of_range);
+
+    auto cmd = device.commandBuffer();
+    {
+      auto enc = cmd.startEncoding(device);
+      enc.resetTimestamps(timestamps,0,timestamps.size());
+    }
+    auto resetSync = device.submit(cmd);
+    resetSync.wait();
+
+    uint64_t unavailable = uint64_t(-1);
+    EXPECT_FALSE(timestamps.tryRead(0,unavailable));
+    EXPECT_EQ(unavailable,uint64_t(-1));
+
+    {
+      auto enc = cmd.startEncoding(device);
+      enc.writeTimestamp(timestamps,0,GpuTimestampStage::Begin);
+      enc.writeTimestamp(timestamps,1,GpuTimestampStage::End);
+    }
+
+    auto sync = device.submit(cmd);
+    sync.wait();
+
+    uint64_t begin   = 0;
+    uint64_t end     = 0;
+    uint64_t elapsed = 0;
+    EXPECT_TRUE(timestamps.tryRead(0,begin));
+    EXPECT_TRUE(timestamps.tryRead(1,end));
+    EXPECT_TRUE(timestamps.elapsedNs(0,1,elapsed));
+    }
+  catch(std::system_error& e) {
+    if(e.code()==Tempest::GraphicsErrc::NoDevice)
+      Log::d("Skipping graphics testcase: ", e.what()); else
+      throw;
+    }
 #endif
   }
 

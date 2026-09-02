@@ -5,6 +5,7 @@
 #include <Tempest/Texture2d>
 #include <Tempest/StorageBuffer>
 #include <cassert>
+#include <stdexcept>
 
 #include "utility/compiller_hints.h"
 
@@ -64,6 +65,22 @@ void Encoder<Tempest::CommandBuffer>::setScissor(const Rect &vp) {
 
 void Encoder<Tempest::CommandBuffer>::setDebugMarker(std::string_view tag) {
   impl->setDebugMarker(tag);
+  }
+
+void Encoder<Tempest::CommandBuffer>::resetTimestamps(const GpuTimestampPool& pool, uint32_t first, uint32_t count) {
+  if(pool.impl.handler==nullptr || count==0)
+    return;
+  if(first>=pool.impl.handler->size() || count>pool.impl.handler->size()-first)
+    throw std::out_of_range("timestamp query range");
+  impl->resetTimestamps(*pool.impl.handler,first,count);
+  }
+
+void Encoder<Tempest::CommandBuffer>::writeTimestamp(const GpuTimestampPool& pool, uint32_t query, GpuTimestampStage stage) {
+  if(pool.impl.handler==nullptr)
+    return;
+  if(query>=pool.impl.handler->size())
+    throw std::out_of_range("timestamp query index");
+  impl->writeTimestamp(*pool.impl.handler,query,stage);
   }
 
 void Encoder<Tempest::CommandBuffer>::setPushData(const void* data, size_t size) {
