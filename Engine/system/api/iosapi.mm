@@ -225,7 +225,6 @@ static uint32_t      frameRatePreferred = 0;
     resumeEngineFromUIKit();
     }
   }
-
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)ex {
   [self touchesEnded:touches withEvent:ex];
   }
