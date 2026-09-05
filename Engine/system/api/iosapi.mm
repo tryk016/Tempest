@@ -636,7 +636,7 @@ static Fiber            mainContext;
 static Fiber            appleContext;
 static Fiber*           currentContext = nullptr;
 // UIApplicationMain and UIKit callbacks execute on this swapped stack.
-alignas(16) static char appleStack[8*1024*1024]={};
+alignas(16) static char appleStack[1024*1024]={};
 static             void appleMain(void*);
 
 inline static void createAppleSubContext()  {
