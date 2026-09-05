@@ -155,15 +155,12 @@ MtSwapchain::MtSwapchain(MtDevice& dev, SystemApi::Window *w,
   const CGRect rect = windowRect(pimpl->wnd);
   sz = {int(rect.size.width), int(rect.size.height)};
 
-#if defined(__OSX__)
   pimpl->view = [[MetalView alloc] initWithFrame:rect];
+#if defined(__OSX__)
   pimpl->view.wantsLayer = YES;
   pimpl->wnd.contentView = pimpl->view;
 #elif defined(__IOS__)
-  pimpl->view = [[MetalView alloc] initWithFrame:pimpl->wnd.bounds];
   pimpl->view.multipleTouchEnabled = YES;
-  pimpl->view.autoresizingMask = UIViewAutoresizingFlexibleWidth |
-                                UIViewAutoresizingFlexibleHeight;
   pimpl->wnd.rootViewController.view = pimpl->view;
 #endif
 
