@@ -85,6 +85,11 @@ void Painter::implSetColor(float r, float g, float b, float a) {
 void Painter::drawTriangle(int x0, int y0, float u0, float v0,
                            int x1, int y1, float u1, float v1,
                            int x2, int y2, float u2, float v2) {
+  if(state!=StBrush) {
+    dev.setTopology(Triangles);
+    state=StBrush;
+    implBrush(s.br);
+    }
   FPoint trigBuf[4+4+4+4];
   implDrawTrig( float(x0), float(y0), s.dU+u0*s.invW,s.dV+v0*s.invH,
                 float(x1), float(y1), s.dU+u1*s.invW,s.dV+v1*s.invH,
@@ -95,6 +100,11 @@ void Painter::drawTriangle(int x0, int y0, float u0, float v0,
 void Painter::drawTriangle(float x0, float y0, float u0, float v0,
                            float x1, float y1, float u1, float v1,
                            float x2, float y2, float u2, float v2) {
+  if(state!=StBrush) {
+    dev.setTopology(Triangles);
+    state=StBrush;
+    implBrush(s.br);
+    }
   FPoint trigBuf[4+4+4+4];
   implDrawTrig( x0, y0, s.dU+u0*s.invW,s.dV+v0*s.invH,
                 x1, y1, s.dU+u1*s.invW,s.dV+v1*s.invH,
@@ -520,8 +530,8 @@ void Painter::popState() {
     }
   }
 
-void Painter::drawText(int x, int y, const char *txt) {
-  if(txt==nullptr)
+void Painter::drawText(int x, int y, std::string_view txt) {
+  if(txt.empty())
     return;
   auto pb = s.br;
   auto fx = s.fnt;
@@ -552,8 +562,8 @@ void Painter::drawText(int x, int y, const char *txt) {
   setBrush(pb);
   }
 
-void Painter::drawText(int x, int y, const char16_t *txt) {
-  if(txt==nullptr)
+void Painter::drawText(int x, int y, std::u16string_view txt) {
+  if(txt.empty())
     return;
   auto pb = s.br;
   auto fx = s.fnt;
@@ -561,10 +571,10 @@ void Painter::drawText(int x, int y, const char16_t *txt) {
   const float kV = 1.f/s.tr.mat.scaleHintV();
   fx.setPixelSize(fx.pixelSize()*s.tr.mat.scaleHint());
 
-  for(;*txt;++txt) {
-    auto l = s.fnt.letterGeometry(*txt);
+  for(size_t i=0; i<txt.size(); ++i) {
+    auto l = s.fnt.letterGeometry(txt[i]);
     if(!l.size.isEmpty()) {
-      auto& v     = fx.letter(*txt,ta);
+      auto& v     = fx.letter(txt[i],ta);
       float dposX = float(v.dpos.x*kH), dposY = float(v.dpos.y*kV);
       float szX   = float(v.size.w*kH), szY   = float(v.size.h*kV);
 
@@ -577,14 +587,6 @@ void Painter::drawText(int x, int y, const char16_t *txt) {
     }
 
   setBrush(pb);
-  }
-
-void Painter::drawText(int x, int y, const std::string &txt) {
-  return drawText(x,y,txt.c_str());
-  }
-
-void Painter::drawText(int x, int y, const std::u16string &txt) {
-  return drawText(x,y,txt.c_str());
   }
 
 static int calcLineWidth(Utf8Iterator i, Utf8Iterator eol, const Font& fnt, TextureAtlas& ta) {
@@ -601,7 +603,7 @@ static int calcLineWidth(Utf8Iterator i, Utf8Iterator eol, const Font& fnt, Text
   return x;
   }
 
-static int calcTextHeight(const char* txt, const int w, int& l0, const Font& fnt) {
+static int calcTextHeight(std::string_view txt, const int w, int& l0, const Font& fnt) {
   int x = 0,  y=0, cnt = 0;
 
   Utf8Iterator i(txt);
@@ -634,8 +636,8 @@ static int calcTextHeight(const char* txt, const int w, int& l0, const Font& fnt
   return y;
   }
 
-void Painter::drawText(int rx, int ry, int w, int h, const char *txt, AlignFlag flg) {
-  if(txt==nullptr)
+void Painter::drawText(int rx, int ry, int w, int h, std::string_view txt, AlignFlag flg) {
+  if(txt.empty())
     return;
   auto pb = s.br;
   auto fx = s.fnt;
@@ -699,14 +701,6 @@ void Painter::drawText(int rx, int ry, int w, int h, const char *txt, AlignFlag 
   setBrush(pb);
   }
 
-void Painter::drawText(int x, int y, int w, int h, const std::string &txt, AlignFlag flg) {
-  drawText(x,y,w,h,txt.c_str(),flg);
-  }
-
-void Painter::drawText(const Rect& r, const char* txt, AlignFlag flg) {
-  drawText(r.x,r.y,r.w,r.h,txt,flg);
-  }
-
-void Painter::drawText(const Rect& r, const std::string& txt, AlignFlag flg) {
+void Painter::drawText(const Rect& r, std::string_view txt, AlignFlag flg) {
   drawText(r.x,r.y,r.w,r.h,txt,flg);
   }

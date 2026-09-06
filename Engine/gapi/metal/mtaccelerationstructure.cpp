@@ -99,13 +99,8 @@ MtTopAccelerationStructure::MtTopAccelerationStructure(MtDevice& dx, const RtIns
                                                        AccelerationStructure*const* as, size_t asSize)
   :owner(dx) {
   auto pool = NsPtr<NS::AutoreleasePool>::init();
-#if defined(__IOS__)
-  constexpr auto instanceStorageMode = MTL::ResourceStorageModeShared;
-#else
-  constexpr auto instanceStorageMode = MTL::ResourceStorageModeManaged;
-#endif
   instances = NsPtr<MTL::Buffer>(dx.impl->newBuffer(sizeof(MTL::AccelerationStructureUserIDInstanceDescriptor)*asSize,
-                                                    instanceStorageMode));
+                                                    hostVisibleResourceOptions(*dx.impl)));
   if(instances==nullptr)
     throw std::system_error(GraphicsErrc::OutOfVideoMemory);
 
@@ -133,7 +128,7 @@ MtTopAccelerationStructure::MtTopAccelerationStructure(MtDevice& dx, const RtIns
       blas.push_back(ax->impl.get());
       }
     }
-  if(instanceStorageMode==MTL::ResourceStorageModeManaged)
+  if(instances->storageMode()==MTL::StorageModeManaged)
     instances->didModifyRange(NS::Range(0,instances->length()));
 
   auto asArray = NsPtr<NS::Array>(NS::Array::array(reinterpret_cast<NS::Object**>(blas.data()), blas.size()));

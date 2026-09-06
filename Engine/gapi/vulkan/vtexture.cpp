@@ -20,17 +20,21 @@ VTexture::VTexture(VTexture&& other) {
   std::swap(is3D,           other.is3D);
   std::swap(isFilterable,   other.isFilterable);
   std::swap(extViews,       other.extViews);
+  std::swap(extDescr,       other.extDescr);
   }
 
 VTexture::~VTexture() {
   if(alloc!=nullptr) {
-    alloc->device()->bindless.notifyDestroy(this);
+    alloc->device()->descPool.notifyDestroy(this);
     alloc->free(*this);
     }
   }
 
-VkImageView VTexture::view(const ComponentMapping& m, uint32_t mipLevel, bool is3D) {
+VkImageView VTexture::view(const ComponentMapping& m, uint32_t mipLevel, bool is3D, bool isUAV) {
   VkDevice dev = alloc->device()->device.impl;
+
+  if(isUAV && mipLevel==uint32_t(-1))
+    mipLevel = 0;
 
   if(m.r==ComponentSwizzle::Identity &&
      m.g==ComponentSwizzle::Identity &&
@@ -61,8 +65,57 @@ VkImageView VTexture::view(const ComponentMapping& m, uint32_t mipLevel, bool is
   return v.v;
   }
 
+void VTexture::descriptor(void* dest, const ComponentMapping& m, uint32_t mipLevel, bool is3D, bool isUAV) {
+  VDevice& dev = *alloc->device();
+  auto vkWriteResourceDescriptorsEXT = dev.vkWriteResourceDescriptorsEXT;
+
+  if(isUAV && mipLevel==uint32_t(-1))
+    mipLevel = 0;
+
+  std::lock_guard<Detail::SpinLock> guard(syncViews);
+  for(size_t i=0; i<extViews.size(); ++i) {
+    auto& v = extViews[i];
+    if(v.m==m && v.mip==mipLevel && v.is3D==is3D && v.v==VK_NULL_HANDLE) {
+      auto ptr = extDescr.data() + i*dev.props.resourceDescriptorSize;
+      std::memcpy(dest, ptr, dev.props.resourceDescriptorSize);
+      return;
+      }
+    }
+
+  const size_t prevSzDescr = extDescr.size();
+
+  View v;
+  v.m     = m;
+  v.mip   = mipLevel;
+  v.is3D  = is3D;
+  v.v     = VK_NULL_HANDLE;
+  extDescr.resize((extViews.size() + 1) * dev.props.resourceDescriptorSize);
+
+  VkImageViewCreateInfo view = createInfo(&m, mipLevel, is3D);
+
+  VkImageDescriptorInfoEXT info = {VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT};
+  info.pView  = &view;
+  info.layout = defaultLayout();
+
+  VkResourceDescriptorInfoEXT res = {VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT};
+  res.type        = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  res.data.pImage = &info;
+
+  VkHostAddressRangeEXT host = {extDescr.data() + prevSzDescr, dev.props.resourceDescriptorSize};
+  vkAssert(vkWriteResourceDescriptorsEXT(dev.device.impl, 1, &res, &host));
+  try {
+    extViews.push_back(v);
+    }
+  catch (...) {
+    //leave decriptor memory as-is - not a problem
+    throw;
+    }
+  auto ptr = extDescr.data()+prevSzDescr;
+  std::memcpy(dest, ptr, dev.props.resourceDescriptorSize);
+  }
+
 VkImageView VTexture::fboView(uint32_t mip) {
-  return view(ComponentMapping(),mip,false);
+  return view(ComponentMapping(),mip,false,false);
   }
 
 void VTexture::createViews(VkDevice device) {
@@ -77,6 +130,11 @@ void VTexture::destroyViews(VkDevice device) {
 
 void VTexture::createView(VkImageView& ret, VkDevice device, VkFormat format,
                           const ComponentMapping* cmap, uint32_t mipLevel, bool is3D) {
+  VkImageViewCreateInfo viewInfo = createInfo(cmap, mipLevel, is3D);
+  vkAssert(vkCreateImageView(device, &viewInfo, nullptr, &ret));
+  }
+
+VkImageViewCreateInfo VTexture::createInfo(const ComponentMapping* cmap, uint32_t mipLevel, bool is3D) const {
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image    = impl;
@@ -105,8 +163,15 @@ void VTexture::createView(VkImageView& ret, VkDevice device, VkFormat format,
   viewInfo.subresourceRange.levelCount     = (mipLevel==uint32_t(-1) ? mipCnt :        1);
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount     = 1;
+  return viewInfo;
+  }
 
-  vkAssert(vkCreateImageView(device, &viewInfo, nullptr, &ret));
+VkImageLayout VTexture::defaultLayout() const {
+  if(nativeIsDepthFormat(format))
+    return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+  if(isStorageImage)
+    return VK_IMAGE_LAYOUT_GENERAL;
+  return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   }
 
 VTextureWithFbo::VTextureWithFbo(VTexture&& base)

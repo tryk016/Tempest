@@ -5,6 +5,7 @@
 #include <Tempest/AccelerationStructure>
 #include <stdexcept>
 #include <string>
+
 #include "vulkan_sdk.h"
 
 #include "gapi/vulkan/vallocator.h"
@@ -13,11 +14,12 @@
 #include "gapi/vulkan/vfence.h"
 #include "gapi/vulkan/vframebuffermap.h"
 #include "gapi/vulkan/vbuffer.h"
-#include "gapi/vulkan/vbindlesscache.h"
 #include "gapi/vulkan/vpushdescriptor.h"
 #include "gapi/vulkan/vsetlayoutcache.h"
 #include "gapi/vulkan/vpoolcache.h"
 #include "gapi/vulkan/vpsolayoutcache.h"
+#include "gapi/vulkan/vdescriptorallocator.h"
+#include "gapi/vulkan/vsamplercache.h"
 #include "gapi/uploadengine.h"
 #include "exceptions/exception.h"
 #include "utility/compiller_hints.h"
@@ -334,6 +336,17 @@ class VDevice : public AbstractGraphicsApi::Device {
       uint64_t filteredLinearFormat = 0;
       bool     hasFilteredFormat(TextureFormat f) const;
 
+      uint32_t resourceDescriptorSize = 0;
+      uint32_t samplerDescriptorSize  = 0;
+
+      uint32_t resourceHeapReserve = 0;
+      uint32_t samplerHeapReserve  = 0;
+
+      uint32_t resourceHeapMaxSize = 0;
+      uint32_t samplerHeapMaxSize  = 0;
+
+      uint32_t heapAlignment       = 0;
+
       bool     hasMemRq2          = false;
       bool     hasDedicatedAlloc  = false;
       bool     hasSync2           = false;
@@ -346,6 +359,8 @@ class VDevice : public AbstractGraphicsApi::Device {
       bool     hasRobustness2     = false;
       bool     hasStoreOpNone     = false;
       bool     hasMaintenance1    = false;
+      bool     hasMaintenance5    = false;
+      bool     hasDescriptorHeap  = false;
       };
 
     struct Queue final {
@@ -410,12 +425,15 @@ class VDevice : public AbstractGraphicsApi::Device {
     VAllocator              allocator;
 
     VFramebufferMap         fboMap;
+
     VSetLayoutCache         setLayouts;
     VPsoLayoutCache         psoLayouts;
     VPoolCache              descPool;
-    VBindlessCache          bindless;
 
-    VkProps                 props={};
+    VDescriptorAllocator    descAlloc;
+    VSamplerCache           samplers;
+
+    VkProps                 props = {};
 
     PFN_vkGetBufferMemoryRequirements2KHR vkGetBufferMemoryRequirements2 = nullptr;
     PFN_vkGetImageMemoryRequirements2KHR  vkGetImageMemoryRequirements2  = nullptr;
@@ -440,6 +458,12 @@ class VDevice : public AbstractGraphicsApi::Device {
     PFN_vkCmdDebugMarkerBeginEXT                vkCmdDebugMarkerBegin      = nullptr;
     PFN_vkCmdDebugMarkerEndEXT                  vkCmdDebugMarkerEnd        = nullptr;
     PFN_vkDebugMarkerSetObjectNameEXT           vkDebugMarkerSetObjectName = nullptr;
+
+    PFN_vkWriteResourceDescriptorsEXT vkWriteResourceDescriptorsEXT = nullptr;
+    PFN_vkWriteSamplerDescriptorsEXT  vkWriteSamplerDescriptorsEXT = nullptr;
+    PFN_vkCmdPushDataEXT              vkCmdPushDataEXT = nullptr;
+    PFN_vkCmdBindResourceHeapEXT      vkCmdBindResourceHeapEXT = nullptr;
+    PFN_vkCmdBindSamplerHeapEXT       vkCmdBindSamplerHeapEXT = nullptr;
 
     static const std::initializer_list<const char*> requiredExtensions;
 

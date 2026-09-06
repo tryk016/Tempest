@@ -35,8 +35,6 @@ static uintptr_t alignDown(uintptr_t val, uintptr_t align) {
 
 static void swapContext();
 
-static void drawFrame();
-
 @interface TempestWindow : UIWindow {
   @public Tempest::Window* owner;
   @public CADisplayLink*   displayLink;
@@ -110,6 +108,10 @@ static void drawFrame();
           }
       return -1;
       }
+
+    void clear() {
+      touch.clear();
+      }
     };
   TouchState touch;
   }
@@ -135,7 +137,6 @@ static void drawFrame();
 - (void)drawFrame {
   hasPendingFrame.store(true);
   swapContext();
-  // drawFrame();
   }
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)ex {
@@ -204,6 +205,25 @@ static void drawFrame();
   }
 @end
 
+static void discardPendingEvent(TempestWindow* window) {
+  switch(window->curentEvent) {
+    case Event::Resize:
+      window->event.size.~SizeEvent();
+      break;
+    case Event::MouseDown:
+    case Event::MouseMove:
+    case Event::MouseUp:
+      window->event.mouse.~MouseEvent();
+      break;
+    case Event::AppState:
+      window->event.appState.~AppStateEvent();
+      break;
+    default:
+      break;
+    }
+  window->curentEvent = Event::NoEvent;
+  }
+
 static TempestWindow* mainWindow = nullptr;
 
 static void queueAppStateEvent(AppStateEvent::State state, bool swapWithoutOwner) {
@@ -246,11 +266,13 @@ extern "C" void tempestIosSetPreferredFrameRate(int fps) {
 
 -(id)init {
   self = [super init];
-  fullScreen = true;
+  if(self!=nil)
+    fullScreen = true;
   return self;
   }
 
 - (void)viewDidLoad {
+  [super viewDidLoad];
   self.extendedLayoutIncludesOpaqueBars = YES;
   //self.modalPresentationStyle = UIModalPresentationFullScreen;
   //[self setNeedsStatusBarAppearanceUpdate];
@@ -275,8 +297,8 @@ extern "C" void tempestIosSetPreferredFrameRate(int fps) {
   return UIInterfaceOrientationMaskLandscape;
   }
 
--(bool)setAsFullscreen: (bool)fullScreen {
-  self->fullScreen = fullScreen;
+-(bool)setAsFullscreen: (bool)value {
+  self->fullScreen = value;
   [self setNeedsStatusBarAppearanceUpdate];
   return true;
   }
@@ -306,7 +328,9 @@ static bool isApplicationActive = false;
       initWithWindowScene:windowScene];
   window.frame = windowScene.coordinateSpace.bounds;
   window.contentScaleFactor = windowScene.screen.scale;
-  window.rootViewController = [ViewController new];
+  ViewController* controller = [ViewController new];
+  [window setRootViewController:controller];
+  [controller release];
   window.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   window.backgroundColor = [ UIColor blackColor ];
 
@@ -318,6 +342,14 @@ static bool isApplicationActive = false;
   self.window = window;
   mainWindow = window;
   [window makeKeyAndVisible];
+  [window release];
+  }
+
+- (void)dealloc {
+  if(mainWindow==self.window)
+    mainWindow = nil;
+  [_window release];
+  [super dealloc];
   }
 
 - (void)sceneWillResignActive:(UIScene*)scene {
@@ -363,7 +395,7 @@ static bool isApplicationActive = false;
   UISceneConfiguration* configuration = [[UISceneConfiguration alloc]
       initWithName:@"Default Configuration" sessionRole:session.role];
   configuration.delegateClass = TempestSceneDelegate.class;
-  return configuration;
+  return [configuration autorelease];
   }
 
 - (UIInterfaceOrientationMask)application:(UIApplication*)application
@@ -424,16 +456,6 @@ inline static void swapContext() {
   std::atomic_thread_fence(std::memory_order_seq_cst);
   }
 
-static void drawFrame() {
-  auto cb = (mainWindow->owner);
-  @autoreleasepool {
-    if(cb!=nullptr) {
-      mainWindow->hasPendingFrame.store(false);
-      iOSApi::dispatchRender(*cb);
-      }
-    }
-  }
-
 static void appleMain(void*) {
   static std::string app = "application";
   char * argv[2] = {
@@ -473,9 +495,12 @@ void iOSApi::implDestroyWindow(SystemApi::Window *w) {
   auto wx = reinterpret_cast<TempestWindow*>(w);
   if(wx==nullptr)
     return;
+  wx->owner = nullptr;
+  wx->hasPendingFrame.store(false);
   [wx->displayLink invalidate];
   wx->displayLink = nil;
-  wx->owner = nullptr;
+  discardPendingEvent(wx);
+  wx->touch.clear();
   }
 
 void iOSApi::implExit() {

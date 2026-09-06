@@ -3,9 +3,8 @@
 #include <Tempest/Except>
 #include <Tempest/Log>
 #include <algorithm>
+#include <bit>
 #include <libspirv/libspirv.h>
-
-//#include "thirdparty/spirv_cross/spirv_common.hpp"
 
 using namespace Tempest;
 using namespace Tempest::Detail;
@@ -76,13 +75,24 @@ static uint32_t declaredVarSize(spirv_cross::Compiler& comp, const spirv_cross::
   return 0;
   }
 
-
 bool ShaderReflection::LayoutDesc::isUpdateAfterBind() const {
   return runtime!=0 || array!=0;
   }
 
 size_t ShaderReflection::LayoutDesc::sizeofBuffer(size_t id, size_t arraylen) const {
   return bufferSz[id] + bufferEl[id]*arraylen;
+  }
+
+size_t ShaderReflection::LayoutDesc::size() const {
+  return size_t(std::popcount(active));
+  }
+
+uint32_t ShaderReflection::LayoutDesc::numResources() const {
+  return uint32_t(std::popcount(resources & (~array)));
+  }
+
+uint32_t ShaderReflection::LayoutDesc::numSamplers() const {
+  return uint32_t(std::popcount(samplers & (~array)));
   }
 
 
@@ -190,11 +200,13 @@ void ShaderReflection::getBindings(std::vector<Binding>& lay, spirv_cross::Compi
     lay.push_back(b);
     }
   for(auto &resource : resources.storage_images) {
-    auto&    t       = typeFromVariable(comp, resource.id);
-    unsigned binding = comp.get_decoration(resource.id, spv::DecorationBinding);
+    auto&    t        = typeFromVariable(comp, resource.id);
+    unsigned binding  = comp.get_decoration(resource.id, spv::DecorationBinding);
+    unsigned readonly = comp.get_decoration(resource.id, spv::DecorationNonWritable);
+
     Binding b;
     b.layout       = binding;
-    b.cls          = ImgRW; // (readonly.get(spv::DecorationNonWritable) ? UniformsLayout::ImgR : UniformsLayout::ImgRW);
+    b.cls          = readonly ? ImgR : ImgRW;
     b.stage        = s;
     b.runtimeSized = isRuntimeSized(t);
     b.arraySize    = arraySize(t);
@@ -421,6 +433,11 @@ void ShaderReflection::setupLayout(PushBlock& pb, LayoutDesc& lx, SyncDesc& sync
       if(e.runtimeSized || e.arraySize>1)
         lx.array   |= id;
       lx.active |= id;
+
+      if(e.cls!=ShaderReflection::Sampler)
+        lx.resources |= id;
+      if(e.cls==ShaderReflection::Sampler || e.cls==ShaderReflection::Texture)
+        lx.samplers |= id;
 
       sync.read |= id;
       if(e.cls==ShaderReflection::ImgRW || e.cls==ShaderReflection::SsboRW)

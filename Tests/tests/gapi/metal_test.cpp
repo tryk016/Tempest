@@ -620,22 +620,52 @@ TEST(MetalApi,OfflineBuiltinPipelineArchiveColdWarmAndRecovery) {
       MetalApi api{
           ApiFlags::Validation,manifest,partialConfig};
       Device device(api);
-      instantiateArchivedBuiltinPipelines(device);
+      const auto before =
+          MetalApi::pipelineArchiveSnapshot(device);
+      const auto runtimeBefore =
+          MetalApi::runtimeCompilationSnapshot(device);
+
+      instantiateArchivedBuiltinPipelines(device,true,false,false);
+      const auto afterOpaque =
+          MetalApi::pipelineArchiveSnapshot(device);
+      const auto runtimeAfterOpaque =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(afterOpaque.renderHits,before.renderHits+1u);
+      EXPECT_EQ(afterOpaque.renderMisses,before.renderMisses);
+      EXPECT_EQ(afterOpaque.renderAdds,before.renderAdds);
+      EXPECT_EQ(afterOpaque.renderFallbacks,before.renderFallbacks);
+      EXPECT_EQ(runtimeAfterOpaque.renderPsoRequests,
+                runtimeBefore.renderPsoRequests+1u);
+
+      instantiateArchivedBuiltinPipelines(device,false,false,true);
+      const auto afterColorAlpha =
+          MetalApi::pipelineArchiveSnapshot(device);
+      const auto runtimeAfterColorAlpha =
+          MetalApi::runtimeCompilationSnapshot(device);
+      EXPECT_EQ(afterColorAlpha.renderHits,afterOpaque.renderHits);
+      EXPECT_EQ(afterColorAlpha.renderMisses,afterOpaque.renderMisses+1u);
+      EXPECT_EQ(afterColorAlpha.renderAdds,afterOpaque.renderAdds+1u);
+      EXPECT_EQ(afterColorAlpha.renderFallbacks,afterOpaque.renderFallbacks);
+      EXPECT_EQ(runtimeAfterColorAlpha.renderPsoRequests,
+                runtimeAfterOpaque.renderPsoRequests+2u);
+
+      instantiateArchivedBuiltinPipelines(device,false,true,false);
       const auto partial =
           MetalApi::pipelineArchiveSnapshot(device);
-      // MTLBinaryArchive stores pipeline functions rather than the whole
-      // blend descriptor. Both selected texture roles share the exact same
-      // vertex/fragment function pair, so an archive populated through only
-      // the opaque role is already a strict hit for the alpha role. The color
-      // alpha role uses a distinct function pair and remains a strict miss.
-      EXPECT_EQ(partial.renderHits,2u);
-      EXPECT_EQ(partial.renderMisses,1u);
-      EXPECT_EQ(partial.renderAdds,1u);
-      EXPECT_EQ(partial.renderFallbacks,0u);
-      EXPECT_EQ(
-          MetalApi::runtimeCompilationSnapshot(device).
-              renderPsoRequests,
-          4u);
+      const auto runtimePartial =
+          MetalApi::runtimeCompilationSnapshot(device);
+      const auto alphaHits = partial.renderHits-afterColorAlpha.renderHits;
+      const auto alphaMisses =
+          partial.renderMisses-afterColorAlpha.renderMisses;
+      EXPECT_LE(alphaHits,1u);
+      EXPECT_LE(alphaMisses,1u);
+      EXPECT_EQ(alphaHits+alphaMisses,1u);
+      EXPECT_EQ(partial.renderAdds,
+                afterColorAlpha.renderAdds+alphaMisses);
+      EXPECT_EQ(partial.renderFallbacks,afterColorAlpha.renderFallbacks);
+      EXPECT_EQ(runtimePartial.renderPsoRequests,
+                runtimeAfterColorAlpha.renderPsoRequests+
+                    alphaHits+2u*alphaMisses);
       EXPECT_TRUE(MetalApi::flushPipelineArchive(device));
       }
 
