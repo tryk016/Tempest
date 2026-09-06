@@ -319,6 +319,9 @@ file(GLOB_RECURSE PUB_HEADERS "include/Tempest/**")
 
 ### Sources
 target_sources(${PROJECT_NAME} PRIVATE ${GEN_SHADERS_HEADER} ${SOURCES} ${ObjCSOURCES})
+if(OPENGOTHIC_RENDERER_IOS_METAL4)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE TEMPEST_METAL4=1)
+endif()
 include_directories("." "include")
 
 set_target_properties(

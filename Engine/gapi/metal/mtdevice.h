@@ -29,6 +29,7 @@ namespace Tempest {
 namespace Detail {
 
 class MtPipelineArchive;
+class MtMetal4Queue;
 struct MetalPipelineArchiveConfigOwned;
 
 inline MTL::PixelFormat nativeFormat(TextureFormat frm) {
@@ -382,6 +383,9 @@ class MtDevice : public AbstractGraphicsApi::Device {
 
     NsPtr<MTL::Device>         impl;
     NsPtr<MTL::CommandQueue>   queue;
+#if defined(TEMPEST_METAL4)
+    std::unique_ptr<MtMetal4Queue> metal4Queue;
+#endif
 
     std::shared_ptr<MtAsyncState> async = std::make_shared<MtAsyncState>();
 

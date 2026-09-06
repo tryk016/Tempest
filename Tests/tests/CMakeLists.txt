@@ -16,6 +16,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/../../En
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/../../Engine/include")
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/build/sprv")
 if(APPLE)
+  if(OPENGOTHIC_RENDERER_IOS_METAL4)
+    enable_language(OBJCXX)
+    target_sources(${PROJECT_NAME} PRIVATE gapi/metal4_interop.mm)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE TEMPEST_METAL4=1)
+  endif()
   target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/../../Engine/thirdparty/metal-cpp")
 

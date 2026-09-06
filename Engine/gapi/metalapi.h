@@ -81,6 +81,14 @@ using MetalRenderEncodeCallback = void (*)(void*,MTL::RenderCommandEncoder*);
 // eligible, and also after invocation if a verifiable invariant was violated.
 using MetalCommandBufferEncodeCallback = void (*)(void*,MTL::CommandBuffer*);
 
+enum class Metal4InteropResult : uint8_t { Unsupported, Encoded, Failed };
+// Records a classic prefix, Metal 4 body, and classic suffix as one submitted
+// frame. The void* is a borrowed id<MTL4CommandBuffer>. All three buffers are
+// scoped to this call: end native encoders, but never submit, retain, install
+// handlers, or begin/end the Metal 4 buffer. Later Tempest draws use the suffix.
+// Unsupported leaves the command untouched; Failed requires discarding it.
+using Metal4InteropEncodeCallback = bool (*)(void*,MTL::CommandBuffer*,void*,MTL::CommandBuffer*);
+
 struct MetalRuntimeCompilationSnapshot final {
   bool     available             = false;
   uint64_t sourceLibraryRequests = 0;
@@ -271,6 +279,12 @@ class MetalApi : public AbstractGraphicsApi {
         Tempest::Encoder<Tempest::CommandBuffer>& encoder,
         void* context,
         MetalCommandBufferEncodeCallback callback);
+    [[nodiscard]]
+    static Metal4InteropResult stageMetal4Interop(
+        const Tempest::Device& device,
+        Tempest::Encoder<Tempest::CommandBuffer>& encoder,
+        void* context,
+        Metal4InteropEncodeCallback callback);
 
   protected:
     Device*        createDevice(std::string_view gpuName) override;

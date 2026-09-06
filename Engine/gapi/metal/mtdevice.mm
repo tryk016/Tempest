@@ -1,6 +1,9 @@
 #if defined(TEMPEST_BUILD_METAL)
 
 #include "mtdevice.h"
+#if defined(TEMPEST_METAL4)
+#include "mtmetal4frame.h"
+#endif
 #include "mtpipelinearchive.h"
 #include "thirdparty/spirv_cross/spirv_msl.hpp"
 
@@ -54,6 +57,10 @@ MtDevice::MtDevice(
   queue = NsPtr<MTL::CommandQueue>(impl->newCommandQueue());
   if(queue.get()==nullptr)
     throw std::system_error(Tempest::GraphicsErrc::NoDevice);
+
+#if defined(TEMPEST_METAL4)
+  metal4Queue = std::make_unique<MtMetal4Queue>(*this);
+#endif
 
   if(this->builtinOffline!=nullptr) {
     auto pool = NsPtr<NS::AutoreleasePool>::init();

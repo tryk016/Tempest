@@ -21,6 +21,9 @@
 #include "gapi/metal/mtpipeline.h"
 #include "gapi/metal/mtpipelinearchive.h"
 #include "gapi/metal/mtcommandbuffer.h"
+#if defined(TEMPEST_METAL4)
+#include "gapi/metal/mtmetal4frame.h"
+#endif
 #include "gapi/metal/mttexture.h"
 #include "gapi/metal/mtpipelinelay.h"
 #include "gapi/metal/mtdescriptorarray.h"
@@ -229,6 +232,34 @@ bool MetalApi::withActiveCommandBuffer(
          encoder.state.curCompute==nullptr;
   }
 
+Metal4InteropResult MetalApi::stageMetal4Interop(
+    const Tempest::Device& device, Tempest::Encoder<Tempest::CommandBuffer>& encoder,
+    void* context, Metal4InteropEncodeCallback callback) {
+#if defined(TEMPEST_METAL4)
+  auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  auto* command = dynamic_cast<MtCommandBuffer*>(encoder.impl);
+  if(nativeDevice==nullptr || command==nullptr || &command->device!=nativeDevice ||
+     context==nullptr || callback==nullptr || command->impl==nullptr ||
+     command->nativeEncodingAttempted || command->isRecording() ||
+     encoder.state.stage!=Encoder<Tempest::CommandBuffer>::None ||
+     encoder.state.curPipeline!=nullptr || encoder.state.curCompute!=nullptr ||
+     command->impl->status()!=MTL::CommandBufferStatusNotEnqueued)
+    return Metal4InteropResult::Failed;
+  if(!nativeDevice->metal4Queue->ready())
+    return Metal4InteropResult::Unsupported;
+  if(!command->metal4)
+    command->metal4 = std::make_unique<MtMetal4Frame>(*nativeDevice);
+  if(!command->metal4->available())
+    return Metal4InteropResult::Unsupported;
+  command->nativeEncodingAttempted = true;
+  return command->metal4->encode(command->impl.get(),context,callback)
+       ? Metal4InteropResult::Encoded : Metal4InteropResult::Failed;
+#else
+  (void)device; (void)encoder; (void)context; (void)callback;
+  return Metal4InteropResult::Unsupported;
+#endif
+  }
+
 std::vector<AbstractGraphicsApi::Props> MetalApi::devices() const {
 #if defined(__OSX__)
   auto dev = MTL::CopyAllDevices();
@@ -418,6 +449,13 @@ std::shared_ptr<AbstractGraphicsApi::Fence> MetalApi::submit(Device* d, CommandB
   auto pfence = dx->aquireFence();
   if(pfence==nullptr)
     throw DeviceLostException();
+
+#if defined(TEMPEST_METAL4)
+  if(cx.metal4 && cx.metal4->encoded()) {
+    cx.metal4->submit(cx.impl.get(),pfence);
+    return pfence;
+    }
+#endif
 
   auto async = dx->asyncState();
   MtAsyncState::SubmissionToken token;

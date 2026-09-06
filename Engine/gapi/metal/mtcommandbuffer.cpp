@@ -4,6 +4,9 @@
 
 #include "mtbuffer.h"
 #include "mtdevice.h"
+#if defined(TEMPEST_METAL4)
+#include "mtmetal4frame.h"
+#endif
 #include "mtpipeline.h"
 #include "mtpipelinelay.h"
 #include "mtdescriptorarray.h"
@@ -71,6 +74,10 @@ void MtCommandBuffer::end() {
   }
 
 void MtCommandBuffer::reset() {
+#if defined(TEMPEST_METAL4)
+  if(metal4)
+    metal4->reset();
+#endif
   auto pool = NsPtr<NS::AutoreleasePool>::init();
   auto desc = NsPtr<MTL::CommandBufferDescriptor>::init();
   desc->setRetainedReferences(false);

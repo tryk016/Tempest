@@ -15,6 +15,7 @@ class MetalApi;
 namespace Detail {
 
 class MtDevice;
+class MtMetal4Frame;
 class MtBuffer;
 class MtPipeline;
 class MtCompPipeline;
@@ -127,6 +128,9 @@ class MtCommandBuffer : public AbstractGraphicsApi::CommandBuffer {
     MtDevice&                         device;
     NsPtr<MTL::CommandBuffer>         impl;
     bool                              nativeEncodingAttempted;
+#if defined(TEMPEST_METAL4)
+    std::unique_ptr<MtMetal4Frame>      metal4;
+#endif
 
     NsPtr<MTL::RenderCommandEncoder>  encDraw;
     NsPtr<MTL::ComputeCommandEncoder> encComp;
