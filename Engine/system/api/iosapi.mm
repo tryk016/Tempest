@@ -133,6 +133,10 @@ static uint32_t      frameRatePreferred = 0;
           }
       return -1;
       }
+
+    void clear() {
+      touch.clear();
+      }
     };
   TouchState touch;
   }
@@ -230,6 +234,21 @@ static uint32_t      frameRatePreferred = 0;
   }
 @end
 
+static void discardPendingEvent(TempestWindow* window) {
+  switch(window->curentEvent) {
+    case Event::Resize:
+      window->event.size.~SizeEvent();
+      break;
+    case Event::MouseDown:
+    case Event::MouseMove:
+    case Event::MouseUp:
+      window->event.mouse.~MouseEvent();
+      break;
+    default:
+      break;
+    }
+  window->curentEvent = Event::NoEvent;
+  }
 
 @interface ViewController:UIViewController{}
 -(id)init;
@@ -247,6 +266,7 @@ static uint32_t      frameRatePreferred = 0;
   }
 
 - (void)viewDidLoad {
+  [super viewDidLoad];
   self.extendedLayoutIncludesOpaqueBars = YES;
   //self.modalPresentationStyle = UIModalPresentationFullScreen;
   //[self setNeedsStatusBarAppearanceUpdate];
@@ -271,8 +291,8 @@ static uint32_t      frameRatePreferred = 0;
   return UIInterfaceOrientationMaskAll;
   }
 
--(bool)setAsFullscreen: (bool)fullScreen {
-  self->fullScreen = fullScreen;
+-(bool)setAsFullscreen: (bool)value {
+  self->fullScreen = value;
   [self setNeedsStatusBarAppearanceUpdate];
   return true;
   }
@@ -359,7 +379,7 @@ static bool initializeWindow(TempestWindow* window) {
   ViewController* controller = [[ViewController alloc] init];
   if(controller==nil)
     return false;
-  window.rootViewController = controller;
+  [window setRootViewController:controller];
   window.multipleTouchEnabled = YES;
   controller.view.multipleTouchEnabled = YES;
   [controller release];
@@ -777,10 +797,10 @@ SystemApi::Window *iOSApi::implCreateWindow(Tempest::Window *owner, SystemApi::S
 
 void iOSApi::implDestroyWindow(SystemApi::Window *w) {
   auto wx = reinterpret_cast<TempestWindow*>(w);
-  if(wx==nullptr)
-    return;
   wx->owner = nullptr;
   invalidateDisplayLink(wx);
+  discardPendingEvent(wx);
+  wx->touch.clear();
   }
 
 void iOSApi::implExit() {
