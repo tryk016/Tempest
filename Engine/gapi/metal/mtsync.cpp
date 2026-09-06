@@ -40,6 +40,7 @@ bool MtFence::isFinalStatus() const {
 
 void MtFence::clear() {
   status.store(MTL::CommandBufferStatusNotEnqueued);
+  gpuSeconds = 0;
   error  = MTL::CommandBufferErrorNone;
   errorStr.clear();
   errorLog.clear();

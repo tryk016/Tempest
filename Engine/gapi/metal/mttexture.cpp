@@ -36,7 +36,7 @@ static MTL::StorageMode cpuVisibleStorageMode(const MtDevice& dev) {
   (void)dev;
   return MTL::StorageModeShared;
 #else
-  return dev.impl->hasUnifiedMemory() ? MTL::StorageModeShared : MTL::StorageModeManaged;
+  return dev.impl.get()->hasUnifiedMemory() ? MTL::StorageModeShared : MTL::StorageModeManaged;
 #endif
   }
 

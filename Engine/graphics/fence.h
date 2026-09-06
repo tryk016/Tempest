@@ -5,6 +5,7 @@
 namespace Tempest {
 
 class Device;
+class MetalApi;
 
 class Fence final {
   public:
@@ -22,5 +23,6 @@ class Fence final {
     std::shared_ptr<AbstractGraphicsApi::Fence> impl;
 
   friend class Tempest::Device;
+  friend class Tempest::MetalApi;
   };
 }

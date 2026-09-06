@@ -3,6 +3,7 @@
 #include <Tempest/AbstractGraphicsApi>
 
 #include <condition_variable>
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <mutex>
@@ -83,6 +84,13 @@ class MtAsyncState final {
     void waitIdle() {
       std::unique_lock<std::mutex> guard(sync);
       idleCv.wait(guard,[this](){
+        return inFlight==0u;
+        });
+      }
+
+    bool waitIdle(uint64_t timeoutMs) {
+      std::unique_lock<std::mutex> guard(sync);
+      return idleCv.wait_for(guard,std::chrono::milliseconds(timeoutMs),[this](){
         return inFlight==0u;
         });
       }

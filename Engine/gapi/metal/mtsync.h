@@ -16,6 +16,7 @@ struct MtFence : public AbstractGraphicsApi::Fence {
 
   MtDevice*                device = nullptr;
   std::atomic<MTL::CommandBufferStatus> status = {};
+  double                   gpuSeconds = 0;
   //MTL::CommandBufferStatus status = MTL::CommandBufferStatusNotEnqueued;
   MTL::CommandBufferError  error  = MTL::CommandBufferErrorNone;
   std::string              errorStr;

@@ -25,6 +25,7 @@ struct MetalPipelineArchiveConfigOwned;
 
 class CommandBuffer;
 class Device;
+class Fence;
 class StorageBuffer;
 class Texture2d;
 class MetalApi;
@@ -237,6 +238,16 @@ class MetalApi : public AbstractGraphicsApi {
     [[nodiscard]]
     static BorrowedMetalTexture borrowTexture(const Tempest::Device& device,
                                                const Texture2d& texture) noexcept;
+    // GPU execution duration in seconds. Zero means unavailable, including a
+    // pending or failed fence. Does not wait or retain a command buffer.
+    [[nodiscard]]
+    static double completedGpuTime(const Tempest::Device& device,
+                                   const Tempest::Fence& fence) noexcept;
+    [[nodiscard]]
+    static uint64_t allocatedResourceBytes(const Tempest::Device& device) noexcept;
+    // A timeout leaves all pending submissions and their owners intact.
+    [[nodiscard]]
+    static bool waitIdle(const Tempest::Device& device, uint64_t timeoutMs);
     [[nodiscard]]
     static MetalRuntimeCompilationSnapshot
         runtimeCompilationSnapshot(const Tempest::Device& device) noexcept;

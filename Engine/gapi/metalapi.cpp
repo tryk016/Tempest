@@ -10,6 +10,7 @@
 #include <Tempest/Pixmap>
 #include <Tempest/Device>
 #include <Tempest/Encoder>
+#include <Tempest/Fence>
 #include <Tempest/StorageBuffer>
 #include <Tempest/Texture2d>
 
@@ -88,6 +89,27 @@ BorrowedMetalTexture MetalApi::borrowTexture(const Tempest::Device& device,
   if(nativeTexture==nullptr || &nativeTexture->dev!=nativeDevice || nativeTexture->impl==nullptr)
     return {};
   return BorrowedMetalTexture(nativeTexture->impl.get());
+  }
+
+double MetalApi::completedGpuTime(const Tempest::Device& device,
+                                 const Tempest::Fence& fence) noexcept {
+  const auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  const auto* nativeFence = dynamic_cast<MtFence*>(fence.impl.get());
+  if(nativeDevice==nullptr || nativeFence==nullptr ||
+     nativeFence->device!=nativeDevice ||
+     nativeFence->status.load()!=MTL::CommandBufferStatusCompleted)
+    return 0;
+  return nativeFence->gpuSeconds;
+  }
+
+uint64_t MetalApi::allocatedResourceBytes(const Tempest::Device& device) noexcept {
+  const auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  return nativeDevice!=nullptr ? uint64_t(nativeDevice->impl.get()->currentAllocatedSize()) : 0;
+  }
+
+bool MetalApi::waitIdle(const Tempest::Device& device, uint64_t timeoutMs) {
+  const auto* nativeDevice = dynamic_cast<MtDevice*>(device.dev);
+  return nativeDevice!=nullptr && nativeDevice->asyncState()->waitIdle(timeoutMs);
   }
 
 MetalRuntimeCompilationSnapshot
@@ -412,6 +434,12 @@ std::shared_ptr<AbstractGraphicsApi::Fence> MetalApi::submit(Device* d, CommandB
         NS::Error* const error = c->error();
         const auto errorCode = error!=nullptr ?
           MTL::CommandBufferError(error->code()) : MTL::CommandBufferErrorNone;
+        if(s==MTL::CommandBufferStatusCompleted) {
+          const double start = c->GPUStartTime();
+          const double end = c->GPUEndTime();
+          if(start>0 && end>start)
+            pfence->gpuSeconds = end-start;
+          }
         dx->signalFence(*pfence,s,errorCode,error);
         }
       catch(...) {

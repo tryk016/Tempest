@@ -1016,6 +1016,12 @@ TEST(MetalApi,ActiveCommandBufferScope) {
     auto sync = device.submit(command);
     EXPECT_TRUE(sync.wait(5000));
 
+    EXPECT_GT(MetalApi::completedGpuTime(device,sync),0.);
+    EXPECT_EQ(MetalApi::completedGpuTime(foreignDevice,sync),0.);
+    EXPECT_EQ(MetalApi::completedGpuTime(device,Fence{}),0.);
+    EXPECT_GE(MetalApi::allocatedResourceBytes(device),4u*4u*4u);
+    EXPECT_TRUE(MetalApi::waitIdle(device,5000));
+
     auto activeCommand = device.commandBuffer();
     {
       auto encoder = activeCommand.startEncoding(device);

@@ -97,3 +97,17 @@ TEST(main,MetalAsyncCompletionTokenIsExactlyOnce) {
   state.finishCompletion(reused);
   state.waitIdle();
   }
+
+TEST(main,MetalAsyncTimeoutPreservesPendingCompletion) {
+  MtAsyncState state;
+  EXPECT_TRUE(state.waitIdle(0));
+  const auto token = state.onSubmit();
+  EXPECT_FALSE(state.waitIdle(0));
+  ASSERT_TRUE(state.beginCompletion(token));
+  EXPECT_FALSE(state.waitIdle(0));
+  PresentFailure failure;
+  failure.kind = PresentFailureKind::Timeout;
+  state.finishCompletion(token,failure);
+  EXPECT_TRUE(state.waitIdle(0));
+  EXPECT_EQ(state.takePresentFailure().kind,PresentFailureKind::Timeout);
+  }
