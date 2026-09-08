@@ -663,7 +663,8 @@ static Fiber            appleContext;
 static Fiber*           currentContext = nullptr;
 // UIApplicationMain and UIKit callbacks execute on this swapped stack.
 alignas(16) static char appleStack[1*1024*1024]={};
-static             void appleMain(void*);
+// The caller changes sp before this call, so appleMain must remain out of line.
+__attribute__((noinline)) static void appleMain(void*);
 
 inline static void createAppleSubContext()  {
   if(_setjmp(mainContext.jmp) == 0) {
