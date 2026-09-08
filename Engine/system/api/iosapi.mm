@@ -160,13 +160,19 @@ static uint32_t      frameRatePreferred = 0;
   resumeEngineFromUIKit();
   }
 
-- (void)drawFrame {
+- (void)displayLinkDidFire:(CADisplayLink*)sender {
   hasPendingFrame.store(true);
-  if(!isEngineReady.load() || !isApplicationActive.load())
-    return;
-  activationResumePending = false;
-  resumeEngineFromUIKit();
-  // drawFrame();
+
+  TempestWindow* const window = self;
+  // Let UIKit unwind the display-link callback before resuming the engine.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if(window!=mainWindow || window->owner==nullptr ||
+       window->displayLink!=sender || !isEngineReady.load() ||
+       !isApplicationActive.load())
+      return;
+    activationResumePending = false;
+    resumeEngineFromUIKit();
+    });
   }
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)ex {
@@ -363,7 +369,7 @@ static void createDisplayLink(TempestWindow* window) {
     return;
   if(window->displayLink==nil) {
     window->displayLink = [CADisplayLink displayLinkWithTarget:window
-                                                     selector:@selector(drawFrame)];
+                                                     selector:@selector(displayLinkDidFire:)];
     applyPreferredFrameRate(window->displayLink);
     [window->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
                               forMode:NSRunLoopCommonModes];
@@ -858,9 +864,9 @@ void iOSApi::implProcessEvents(AppCallBack& cb) {
     return;
     }
   
-  // The engine and UIKit fibers share one OS thread. An Objective-C pool
-  // pushed on the engine fiber can be invalidated while UIKit runs and then
-  // trigger AutoreleasePoolPage::badPop when this stack resumes.
+  // UIKit already owns an autorelease pool around each event-loop iteration.
+  // A nested processEvents() can let UIKit drain that outer pool before this
+  // fiber frame resumes, so do not push a pool whose lifetime spans callbacks.
   {
     auto& wnd   = *mainWindow->owner;
     auto  eType = mainWindow->curentEvent;
