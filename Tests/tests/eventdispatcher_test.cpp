@@ -80,3 +80,42 @@ TEST(main,EventDispatcher_MouseEvent) {
   EXPECT_EQ(b0.up,  1);
   EXPECT_EQ(b0.move,1);
   }
+
+TEST(main,EventDispatcher_IndependentTouches) {
+  struct TouchWidget final:Widget {
+    std::vector<int> drags;
+    std::vector<int> releases;
+    int doubleClicks = 0;
+
+    void mouseDownEvent(MouseEvent&) override {}
+    void mouseDoubleClickEvent(MouseEvent& e) override {
+      ++doubleClicks;
+      Widget::mouseDoubleClickEvent(e);
+      }
+    void mouseDragEvent(MouseEvent& e) override { drags.push_back(e.mouseID); }
+    void mouseUpEvent(MouseEvent& e) override { releases.push_back(e.mouseID); }
+    };
+
+  for(int released:{0,1}) {
+    TouchWidget widget;
+    widget.resize(100,100);
+    EventDispatcher dispatcher(widget);
+    auto event = [](Event::Type type,int id,int x=20) {
+      return MouseEvent(x,20,Event::ButtonLeft,Event::M_NoModifier,0,id,type);
+      };
+    auto first = event(Event::MouseDown,0);
+    auto second = event(Event::MouseDown,1);
+    dispatcher.dispatchMouseDown(widget,first);
+    dispatcher.dispatchMouseDown(widget,second);
+    EXPECT_EQ(widget.doubleClicks,0);
+
+    auto up = event(Event::MouseUp,released);
+    dispatcher.dispatchMouseUp(widget,up);
+    auto move = event(Event::MouseMove,1-released,200);
+    dispatcher.dispatchMouseMove(widget,move);
+    auto last = event(Event::MouseUp,1-released,200);
+    dispatcher.dispatchMouseUp(widget,last);
+    EXPECT_EQ(widget.drags,std::vector<int>({1-released}));
+    EXPECT_EQ(widget.releases,std::vector<int>({released,1-released}));
+    }
+  }

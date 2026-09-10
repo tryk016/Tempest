@@ -3,6 +3,7 @@
 #include <Tempest/Window>
 #include <Tempest/Event>
 
+#include <array>
 #include <unordered_map>
 
 namespace Tempest {
@@ -46,7 +47,8 @@ class EventDispatcher final {
     std::shared_ptr<Widget::Ref> lock(std::weak_ptr<Widget::Ref>& w);
 
     Widget*                      customRoot = nullptr;
-    std::weak_ptr<Widget::Ref>   mouseUp[Event::MouseButton::ButtonLast];
+    using MouseButtons = std::array<std::weak_ptr<Widget::Ref>,Event::MouseButton::ButtonLast>;
+    std::unordered_map<int,MouseButtons> mouseUp;
     std::weak_ptr<Widget::Ref>   mouseLast;
     std::weak_ptr<Widget::Ref>   mouseOver;
 
@@ -54,6 +56,7 @@ class EventDispatcher final {
 
     std::vector<UiOverlay*>      overlays;
     Event::MouseButton           mouseLastBtn  = Event::MouseButton::ButtonNone;
+    int                          mouseLastId   = 0;
     uint64_t                     mouseLastTime = 0;
     uint64_t                     mouseEvCount  = 0;
 
