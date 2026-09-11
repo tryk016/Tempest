@@ -431,7 +431,10 @@ static TempestWindow* attachWindowToScene(UIWindowScene* windowScene) {
     return nil;
     }
 
-  mainWindow.frame = windowScene.coordinateSpace.bounds;
+  if(@available(iOS 26.0, *))
+    mainWindow.frame = windowScene.effectiveGeometry.coordinateSpace.bounds;
+  else
+    mainWindow.frame = windowScene.coordinateSpace.bounds;
   mainWindow.contentScaleFactor = windowScene.screen.scale;
   createDisplayLink(mainWindow);
   return mainWindow;
@@ -781,7 +784,7 @@ static SystemApi::Window* createWindow(Tempest::Window *owner, uint32_t w, uint3
   (void)h;
   (void)mode;
   auto window = mainWindow;
-  if(window==nil)
+  if(window==nil || window->owner!=nullptr)
     return nullptr;
 
   window->owner = owner;
