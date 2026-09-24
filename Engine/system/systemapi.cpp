@@ -4,6 +4,7 @@
 #include "api/x11api.h"
 #include "api/macosapi.h"
 #include "api/iosapi.h"
+#include "api/androidapi.h"
 #include "eventdispatcher.h"
 
 #include <Tempest/Event>
@@ -98,6 +99,8 @@ uint16_t SystemApi::translateKey(uint64_t scancode) {
 SystemApi& SystemApi::inst() {
  #ifdef __WINDOWS__
   static WindowsApi api;
+#elif defined(__ANDROID__)
+  static AndroidApi api;
 #elif defined(__UNIX__)
   static X11Api api;
 #elif defined(__OSX__)
@@ -203,6 +206,10 @@ void SystemApi::setCursorPosition(SystemApi::Window *w, int x, int y) {
 
 void SystemApi::showCursor(SystemApi::Window *w, CursorShape show) {
   return inst().implShowCursor(w,show);
+  }
+
+CursorShape SystemApi::cursorShape(Tempest::Window& cb) {
+  return cb.resolvedCursor;
   }
 
 float SystemApi::uiScale(Window* w) {
