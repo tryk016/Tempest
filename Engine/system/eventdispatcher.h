@@ -3,8 +3,8 @@
 #include <Tempest/Window>
 #include <Tempest/Event>
 
-#include <map>
 #include <unordered_map>
+#include <vector>
 
 namespace Tempest {
 
@@ -34,6 +34,12 @@ class EventDispatcher final {
     void dispatchDestroyWindow(SystemApi::Window* w);
 
   private:
+    struct MouseCapture {
+      Event::MouseButton          button = {};
+      int                         id     = 0;
+      std::weak_ptr<Widget::Ref>  ref    = {};
+      };
+
     std::shared_ptr<Widget::Ref> implDispatch(Tempest::Widget &w, Tempest::MouseEvent& event);
     std::shared_ptr<Widget::Ref> implDispatch(Tempest::Widget &w, Tempest::FocusEvent& event);
     void                         implMouseWheel(Widget &w, MouseEvent &event);
@@ -45,10 +51,11 @@ class EventDispatcher final {
     void                         handleModKey(const KeyEvent& e);
 
     std::shared_ptr<Widget::Ref> lock(std::weak_ptr<Widget::Ref>& w);
+    std::shared_ptr<Widget::Ref> lock(int id, Event::MouseButton button);
+    std::weak_ptr<Widget::Ref>   reset(int id, Event::MouseButton button, const std::weak_ptr<Widget::Ref>& w = {});
 
     Widget*                      customRoot = nullptr;
-    using MouseCapture = std::pair<int,Event::MouseButton>;
-    std::map<MouseCapture,std::weak_ptr<Widget::Ref>> mouseUp;
+    std::vector<MouseCapture>    mouseUp;
     std::weak_ptr<Widget::Ref>   mouseLast;
     std::weak_ptr<Widget::Ref>   mouseOver;
 
@@ -56,7 +63,7 @@ class EventDispatcher final {
 
     std::vector<UiOverlay*>      overlays;
     Event::MouseButton           mouseLastBtn  = Event::MouseButton::ButtonNone;
-    int                          mouseLastId   = -1;
+    int                          mouseLastId   = 0;
     uint64_t                     mouseLastTime = 0;
     uint64_t                     mouseEvCount  = 0;
 
